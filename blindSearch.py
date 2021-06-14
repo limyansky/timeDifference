@@ -3,6 +3,9 @@
 # Handles commandline inputs
 import argparse
 
+# Varous mathetical functions
+import numpy as np
+
 
 # The function that will be run when the script is called
 def main():
@@ -47,11 +50,22 @@ def main():
                         defult=None,
                         help='The name of the weights column in FT1_file')
 
-
     # Extract the arguments from the parser
     args = parser.parse_args()
 
     return 0
+
+
+# Calculates the size of the FFT
+def FFT_Size(window_size, max_freq):
+    """
+    Calculate the size of the FFT
+
+    Parameters:
+        window_size: Maximum time difference in seconds
+        max_freq:    Maximum frequency to search in Hz
+    """
+    return 2 * int(np.floor(window_size * max_freq))
 
 
 # If called from the commandline, run this script.
