@@ -10,19 +10,43 @@ def main():
     Run a blind search for a pulsar using Atwood's time differencing technique.
 
     Parameters:
-        param_1: The first parameter
-        param_2: The second parameter
+        FT1_file: The photon file to search for a pulsar.
 
     Keyword Arguments:
-        opt_1: The first optional parameter
-        opt_2: The second optional parameter
+        --window_size:   The photon file to search for a pulsar
+        --max_freq:      Maximum frequency to search in Hz
+        --min_freq:      Minimum frequency to search in Hz
+        --weight_column: The name of teh weights column in FT1_file
     """
 
     # Create the argument parser and add the docstring
     parser = argparse.ArgumentParser(description=__doc__)
 
-    # Add Arguments
-    parser.add_argument('param_1', help='Soem description')
+    # Add arguments
+    parser.add_argument('FT1_file',
+                        help='The photon file to search for a pulsar')
+
+    # Add optional arguments
+    parser.add_argument('--window_size',
+                        nargs='?',
+                        default=524288,
+                        help='Maximum time difference in seconds')
+
+    parser.add_argument('--max_freq',
+                        nargs='?',
+                        default=64,
+                        help='Maximum frequency to search in Hz')
+
+    parser.add_argument('--min_freq',
+                        nargs='?',
+                        default=0.5,
+                        help='Minimum frequency to search in Hz')
+
+    parser.add_argument('--weight_column',
+                        nargs='?',
+                        defult=None,
+                        help='The name of the weights column in FT1_file')
+
 
     # Extract the arguments from the parser
     args = parser.parse_args()
