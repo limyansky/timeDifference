@@ -19,7 +19,7 @@ def main():
         --window_size:   The photon file to search for a pulsar
         --max_freq:      Maximum frequency to search in Hz
         --min_freq:      Minimum frequency to search in Hz
-        --weight_column: The name of teh weights column in FT1_file
+        --weight_column: The name of the weights column in FT1_file
     """
 
     # Create the argument parser and add the docstring
@@ -66,6 +66,25 @@ def FFT_Size(window_size, max_freq):
         max_freq:    Maximum frequency to search in Hz
     """
     return 2 * int(np.floor(window_size * max_freq))
+
+
+# Reads events from an FT1 File
+def readEvents(FT1_file, weight_column):
+    """
+    Read events from an FT1 file
+
+    Parameters:
+        FT1_file: The photon file to search for a pulsar
+
+    Keyword Arguments:
+        --weight_column: The name of the weights column in FT1_file
+    """
+
+    return 0
+
+# Sort events according to photon time
+def sortEvents():
+    return 0
 
 
 # If called from the commandline, run this script.
