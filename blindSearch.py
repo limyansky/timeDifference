@@ -74,6 +74,7 @@ def FFT_Size(window_size, max_freq):
 
 
 # Reads events from an FT1 File
+# Returns sorted events
 def readEvents(FT1_file, weight_column=None):
     """
     Read events from an FT1 file
@@ -91,20 +92,25 @@ def readEvents(FT1_file, weight_column=None):
     # Extract the times
     times = hdu[1].data['TIME']
 
+    # An array that will sort times and weights
+    sort_indicies = np.argsort(times)
+
+    # Sort the times
+    times = times[sort_indicies]
+
     # If a weight column is supplied, extract them
     if weight_column is not None:
         weights = hdu[1].data[weight_column]
+
+        # Sort the weights
+        weights = weights[sort_indicies]
     else:
         weights = []
 
     # Close the file
     hdu.close()
 
-    return 0
-
-# Sort events according to photon time
-def sortEvents():
-    return 0
+    return times, weights
 
 
 # If called from the commandline, run this script.
