@@ -105,7 +105,7 @@ def readEvents(FT1_file, weight_column=None):
         # Sort the weights
         weights = weights[sort_indicies]
     else:
-        weights = []
+        weights = 1 * len(times)
 
     # Close the file
     hdu.close()
