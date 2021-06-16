@@ -6,6 +6,9 @@ import argparse
 # Varous mathetical functions
 import numpy as np
 
+# Handles fits files
+from astropy.io import fits
+
 
 # The function that will be run when the script is called
 def main():
@@ -53,6 +56,8 @@ def main():
     # Extract the arguments from the parser
     args = parser.parse_args()
 
+    readEvents(args.FT1_file, args.weight_column)
+
     return 0
 
 
@@ -69,7 +74,7 @@ def FFT_Size(window_size, max_freq):
 
 
 # Reads events from an FT1 File
-def readEvents(FT1_file, weight_column):
+def readEvents(FT1_file, weight_column=None):
     """
     Read events from an FT1 file
 
@@ -79,6 +84,25 @@ def readEvents(FT1_file, weight_column):
     Keyword Arguments:
         --weight_column: The name of the weights column in FT1_file
     """
+
+    # Open the fits file
+    hdu = fits.open(FT1_file)
+
+    # Extract the times
+    times = hdu[1]['TIME']
+
+    # If a weight column is supplied, extract them
+    if weight_column is not None:
+        weights = hdu[1][weight_column]
+    else:
+        weights = []
+
+    # Close the file
+    hdu.close()
+
+    # Debugging
+    print(times)
+    print(weights)
 
     return 0
 
