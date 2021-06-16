@@ -89,20 +89,16 @@ def readEvents(FT1_file, weight_column=None):
     hdu = fits.open(FT1_file)
 
     # Extract the times
-    times = hdu[1]['TIME']
+    times = hdu[1].data['TIME']
 
     # If a weight column is supplied, extract them
     if weight_column is not None:
-        weights = hdu[1][weight_column]
+        weights = hdu[1].data[weight_column]
     else:
         weights = []
 
     # Close the file
     hdu.close()
-
-    # Debugging
-    print(times)
-    print(weights)
 
     return 0
 
