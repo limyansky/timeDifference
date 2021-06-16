@@ -50,7 +50,7 @@ def main():
 
     parser.add_argument('--weight_column',
                         nargs='?',
-                        defult=None,
+                        default=None,
                         help='The name of the weights column in FT1_file')
 
     # Extract the arguments from the parser
