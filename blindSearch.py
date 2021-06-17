@@ -112,6 +112,24 @@ def readEvents(FT1_file, weight_column=None):
 
     return times, weights
 
+# Calculates the time binning
+def timeDiffs(times, weights, window_size=524288, max_freq=64):
+    """
+    Calculates the time difference between events and bins the results.
+
+    Parameters:
+        times: A list of photon times
+        weights: A list of photon weights
+
+    Keyword Arguments:
+        window_size:
+        max_freq:
+    """
+
+    time_resol = 0.5 / max_freq
+
+    return 0
+
 
 # If called from the commandline, run this script.
 if __name__ == '__main__':
