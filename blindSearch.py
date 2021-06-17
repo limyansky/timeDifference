@@ -9,6 +9,12 @@ import numpy as np
 # Handles fits files
 from astropy.io import fits
 
+# Allows for importing C code
+import ctypes
+
+# Prepare the C++ code
+timeDifference = ctypes.CDLL('/home/brent/github/timeDifference/blind_search_utils.so')
+
 
 # The function that will be run when the script is called
 def main():
