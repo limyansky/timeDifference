@@ -10,10 +10,11 @@ import numpy as np
 from astropy.io import fits
 
 # Allows for importing C code
-import ctypes
+from ctypes import CDLL, c_int, c_double, POINTER
 
-# Prepare the C++ code
-timeDifference = ctypes.CDLL('/home/brent/github/timeDifference/blind_search_utils.so')
+# Prepare the C code
+timeDifference = CDLL('/home/brent/github/timeDifference/timeDiff.so')
+CtimeDiff = timeDifference.timeDifference
 
 
 # The function that will be run when the script is called
@@ -62,7 +63,10 @@ def main():
     # Extract the arguments from the parser
     args = parser.parse_args()
 
-    readEvents(args.FT1_file, args.weight_column)
+    times, weights = readEvents(args.FT1_file, args.weight_column)
+
+    timeDiffs = call_CtimeDiff(CtimeDiff, times, weights)
+    print(timeDiffs)
 
     return 0
 
@@ -118,24 +122,47 @@ def readEvents(FT1_file, weight_column=None):
 
     return times, weights
 
-# Calculates the time binning
-def timeDiffs(times, weights, window_size=524288, max_freq=64):
-    """
-    Calculates the time difference between events and bins the results.
 
-    Parameters:
-        times: A list of photon times
-        weights: A list of photon weights
+def call_CtimeDiff(function, photons, weights, windowSize=524288, maxFreq=68):
+    function.argtypes = [POINTER(c_double), POINTER(c_double),
+                         c_int, c_int, c_int]
 
-    Keyword Arguments:
-        window_size:
-        max_freq:
-    """
+    function.restype = POINTER(c_double * FFT_Size(windowSize, maxFreq))
 
-    time_resol = 0.5 / max_freq
+    cPhotons = (c_double * len(photons))(*photons)
+    cWeights = (c_double * len(weights))(*weights)
 
-    return 0
+    histogram = function(cPhotons, cWeights, windowSize, maxFreq,
+                         len(cPhotons))
 
+    histogram = np.frombuffer(histogram.contents)
+
+    return histogram
+
+
+def TimeDiffs(times, weights, window_size=524288, max_freq=64):
+    """TimeDiffs()"""
+    """Extract the binned series of time differences"""
+    """The argument max_freq determines the bin size"""
+    """as time_resol = 1 / (2 * max_freq) """
+    """This together with window_size fixes the size"""
+    """of the returned array of time differences"""
+    # FFT sampling time
+    time_resol = .5 / max_freq
+    # directly bin the time differences
+    time_diffs = [0] * FFT_Size(window_size, max_freq)
+    for i1 in range(len(times) - 1):
+        t1 = times[i1]
+        for i2 in range(i1 + 1, len(times)):
+            t2 = times[i2]
+            # limit the size of the time differences
+            if t2 - t1 >= window_size:
+                break
+            # determine the frequency bin in the array
+            freq_bin = int(np.floor((t2 - t1) / time_resol))
+            # combine the weights appropriately
+            time_diffs[freq_bin] += weights[i1] * weights[i2]
+    return time_diffs
 
 # If called from the commandline, run this script.
 if __name__ == '__main__':
