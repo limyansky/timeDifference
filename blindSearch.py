@@ -122,8 +122,21 @@ def readEvents(FT1_file, weight_column=None):
 
     return times, weights
 
+
 # A function to call the C code which performs the time differencing
 def call_CtimeDiff(function, photons, weights, windowSize=524288, maxFreq=68):
+    """
+    Call a C function to quickly calculate time differences.
+
+    Parameters:
+        function: The handler from ctypes to work with
+        photons: A list of photon times to difference
+        weights: A list of photon weights corresponding to the times
+
+    Keyword Arguments:
+        WindowSize: THe maximum time difference to include
+        maxFreq: The maximum frequency to search
+    """
 
     # Specify the datatypes that will be used as inputs
     function.argtypes = [POINTER(c_double), POINTER(c_double),
@@ -144,6 +157,58 @@ def call_CtimeDiff(function, photons, weights, windowSize=524288, maxFreq=68):
     histogram = np.frombuffer(histogram.contents)
 
     return histogram
+
+
+# Find the appropriate step in P1/P0
+def GetP1_P0Step(times, windowSize=524288, maxFreq=64):
+    """
+    Determine the grid step in the P1/P0 parameter space such that the maximum
+    tolerated frequency drift over the full time span covered by the data
+    is smaller than the FFT resolution (see eq.3 in Ziegler et all 2008) for
+    the largest frequency considered int the search.
+
+    Parameters:
+        times: A list of photon times
+
+    Keyword Arguments:
+        windowSize: The maximum time difference
+        maxFreq: The maximum frequency to search
+    """
+
+    # Find the span covered by the data.
+    time_span = np.amax(times) - np.amin(times)
+
+    # The fft resolution
+    FFT_resol = 1. / windowSize
+
+    # This value is somewhat arbitrary: a finer grid provides
+    # a better sensitivity, but is more time-consuming; a coarser
+    # grid is clearly faster but you risk of missing the pulsar.
+    f1_tolerance = 1. * FFT_resol / time_span
+
+    # at least one point in the grid is within 1/2 the grid
+    # step from the correct value of the parameter (p1/p0)
+    return 2. * f1_tolerance / maxFreq
+
+
+# Generate a list of P1/P0 values to scan over
+def GetP1_P0List(p1_p0_step, lower_p1_p0=0., upper_p1_p0=1.3e-11):
+    """
+    Generate a list of P1/P0 values to scan over
+
+    Parameters:
+        p1_p0_step: The step size of P1/P0
+
+    Keyword Arguments:
+        lower_p1_p0: The lower limit for the list values you want
+        pper_p1_p1: The upper limit for the list values you want
+    """
+
+    # This is a one-liner
+    # Add one last step, even if it falls outside of the range
+    return np.arange(lower_p1_p0, upper_p1_p0 + p1_p0_step, p1_p0_step)
+
+# 
 
 
 def TimeDiffs(times, weights, window_size=524288, max_freq=64):
