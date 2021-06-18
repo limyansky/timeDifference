@@ -14,7 +14,7 @@ from ctypes import CDLL, c_int, c_double, POINTER
 
 # Prepare the C code
 timeDifference = CDLL('/home/brent/github/timeDifference/timeDiff.so')
-CtimeDiff = timeDifference.timeDifference
+CtimeDiff = timeDifference.timeDifference_fast
 
 
 # The function that will be run when the script is called
@@ -122,19 +122,25 @@ def readEvents(FT1_file, weight_column=None):
 
     return times, weights
 
-
+# A function to call the C code which performs the time differencing
 def call_CtimeDiff(function, photons, weights, windowSize=524288, maxFreq=68):
+
+    # Specify the datatypes that will be used as inputs
     function.argtypes = [POINTER(c_double), POINTER(c_double),
                          c_int, c_int, c_int]
 
+    # Specify the datatypes that will be used as outputs
     function.restype = POINTER(c_double * FFT_Size(windowSize, maxFreq))
 
+    # The photons and weights need to be converted into something C can read.
     cPhotons = (c_double * len(photons))(*photons)
     cWeights = (c_double * len(weights))(*weights)
 
+    # Calculate the time differences
     histogram = function(cPhotons, cWeights, windowSize, maxFreq,
                          len(cPhotons))
 
+    # The C output needs to be converted back into something python can read.
     histogram = np.frombuffer(histogram.contents)
 
     return histogram
