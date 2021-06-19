@@ -274,7 +274,50 @@ def SaveWisdom(wisdom_file):
             else:
                 print("Wisdom written to file %s" % wisdom_file)
         except:
-            print "Could not save wisdom to file %s: skipping" % wisdom_file
+            print("Could not save wisdom to file %s: skipping" % wisdom_file)
+
+
+# Run fftw
+def FFTW_Transform(time_differences, window_size, max_freq):
+    """
+    Runs fftw on the data.
+
+    Parameters:
+        time_differences: The array of photon time differences
+        window_size: The maximum time difference
+        max_freq: The maximum frequency to scan
+    """
+
+    # Calculate the size of the fft
+    FFT_size = FFT_Size(window_size, max_freq)
+    alignment = pyfftw.simd_alignment
+
+    # this is tricky: it is needed to get the correct memory alignment for fftw
+    input_array = pyfftw.n_byte_align_empty(FFT_size,
+                                            alignment,
+                                            dtype='float32')
+    output_array = pyfftw.n_byte_align_empty(FFT_size // 2 + 1,
+                                             alignment,
+                                             dtype='complex64')
+
+    # create the FFT object, BEFORE actually loading the data!!!!
+    fft_object = pyfftw.FFTW(input_array, output_array, threads=1)
+
+    # load the actual input into the allocated memory
+    input_array[:] = time_differences
+
+    # this normalization grants that, if the input array is Poisson
+    # distributed,
+    # the Fourier power follows a chi2 distribution with 2 degrees of freedom
+    # unfortunately the time differences are NOT Poisson distributed...
+    norm = np.sum(np.absolute(input_array) / 2.0, dtype=np.float32)
+
+    # FFTW.__Call__ automatically executes the FFT and returns the output array
+    output_array = fft_object()
+
+    # return the normalized Fourier power
+    return np.square(np.absolute(output_array)) / norm
+
 
 
 
