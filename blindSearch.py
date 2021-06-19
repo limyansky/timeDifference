@@ -319,6 +319,105 @@ def FFTW_Transform(time_differences, window_size, max_freq):
     return np.square(np.absolute(output_array)) / norm
 
 
+def ExtractBestCandidate(power_spectrum, min_freq, max_freq):
+    """
+    Pick the candidate frequency with the largest Fourier power, within the
+    prescribed frequency range. Return the par of its frequency and the P-value
+    of observing such a power as a statistical fluctuation. For a discussion,
+    see Sec 4. of Ziegler et al. 2008.
+
+    Parameters:
+        power_spectrum: The output spectrum of pyfftw
+        min_freq: The lowest frequency to search
+        max_freq: The largest frequency to search
+
+    """
+
+    # This value is roughly correct, though FFT_resol := 1/window_size
+    FFT_resol = float(max_freq) / (len(power_spectrum) - 1.0)
+
+    # Ignore peaks at the lowest frequencies, in order to avoid red noise
+    min_index = int(np.floor(float(min_freq) / FFT_resol))
+    peak_index = min_index + np.argmax(power_spectrum[min_index:])
+
+    # We need this operation of CPU complexity NlogN to interpret the power
+    sorted_power = np.sort(power_spectrum[min_index:], kind='heapsort')[::-1]
+
+    # Work out the asymptotic cumulative distribution of the power values
+    [slope, constant] = FitExponentialTail(sorted_power)
+
+    # Apply the asymptotic results to convert the power into a P-value
+    P_value = PowerToPValue(sorted_power[0], slope, constant)
+
+    return [FFT_resol * peak_index, P_value]
+
+
+def FitExponentialTail(sorted_array):
+    """
+    Analyze the probability distribution of values in an array and fit the tail
+    with an exponential function. THe array is assumed to be already sorted
+    and in decreasing order.
+
+    Parameters:
+        sorted_array: A sorted power spectrum from pyfftw
+    """
+
+    # We define the tail through an emprical approximation
+    if len(sorted_array) > 2000000:
+        start_index = 200
+        end_index = 20000
+    else:
+        start_index = int(len(sorted_array) / 10000)
+        end_index = int(len(sorted_array) / 100)
+
+    # consider only the fit range and assume an exponential shape
+    X_values = sorted_array[start_index:end_index]
+    Y_values = np.log(np.arange(start_index + 1, end_index + 1))
+
+    # this is a bit overkilling: a line is a polynomial of order 1
+    return np.polyfit(X_values, Y_values, 1)
+
+
+def PowerToPValue(power, slope, constant):
+    """
+    Apply the asymptotic cumulative distribution of the power under the null
+    hypothesis of no pulsations to estimate the probability of getting the
+    observed values due to chance (P-Value).
+
+    Parameters:
+        Power:
+        Slope: The slope of the exponential tail fit
+        Constant:
+    """
+
+    # this value accounts already for the trials due to FFT bins
+    # it comes from an empirical fit, and is very approximative
+    effective_power = power - np.sqrt(power)
+    return np.amin([np.exp(constant + slope * effective_power), 1])
+
+
+def DisplayCandidate(candidate, best=False):
+    """
+    Print the basic information about a pulsar candidate.
+
+    Parameters:
+        candidate: A candidate to print parameters about
+
+    Keyword arguments:
+        best: Prints some additional information about the candidate
+    """
+    if best:
+        print("\nThe best pulsar candidate is:")
+    # the second entry in the candidate is the value of p1/p0=-f1/f0
+    Fdot = -1. * candidate[1] * candidate[0]
+    print("F0=%.8f F1=%.3e P-Value=%.2e" % (candidate[0], Fdot, candidate[2]))
+    if best:
+        if candidate[1] == 0:
+            print("Characteristic age and Edot not available (F1 null)")
+        else:
+            print("Characteristic age=%.2e years" %
+                  (3.1688e-08 / candidate[1]))
+            print("Edot=I45*%.2e erg/s\n" % (-3.9478e46 * Fdot * candidate[0]))
 
 
 # If called from the commandline, run this script.
