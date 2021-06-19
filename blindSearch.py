@@ -208,7 +208,29 @@ def GetP1_P0List(p1_p0_step, lower_p1_p0=0., upper_p1_p0=1.3e-11):
     # Add one last step, even if it falls outside of the range
     return np.arange(lower_p1_p0, upper_p1_p0 + p1_p0_step, p1_p0_step)
 
-# 
+
+# Correct times for another step in P1/P0
+def TimeWarp(times, p1_p0, epoch):
+    """
+    Compensate for a steady frequency drift. This way, the new time series is
+    periodic and can be searched with standard FFTs. The time transform is
+    described in Ransom et al. 2001. See also eq 1 in Ziegler et al. 2008.
+
+    Parameters: 
+        times: A list (numpy array) of photon times
+        p1_p0: The P1/P0 value to correct
+        epoch: The epoch of the timing solution
+  """TimeWarp()"""
+  """Stretch a time series in order to compensate for a"""
+  """steady frequency drift. This way, the new time series"""
+  """is periodic and can be searched with standard FFTs."""
+  """This time transform is described in Ransom et al. 2001"""
+  """See also eq 1 in Ziegler et al. 2008"""
+  # the minus sign enters because p1_p0 is p1/p0=-f1/f0
+
+    times = times - 0.5 * p1_p0 * (times - epoch)**2
+    return times
+
 
 
 def TimeDiffs(times, weights, window_size=524288, max_freq=64):

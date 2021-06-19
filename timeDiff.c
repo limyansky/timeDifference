@@ -71,7 +71,7 @@ double * timeDifference_fast(double *photonTimes, double *photonWeights,
     float timeResol;
     double photonDiff;
     int freqBin;
-    int skip=0;
+    int skip=1;
 
     //Calculate the time resolution
     timeResol = 0.5 / maxFreq;
@@ -92,6 +92,9 @@ double * timeDifference_fast(double *photonTimes, double *photonWeights,
     // Loop through all the photons, except for the last one
     for (int ii = 0; ii < nPhotons - 1; ii++)
     {
+        // printf("\n");
+        // printf("ii is: %d\n", ii);
+        // printf("Skip at start of ii: %d\n", skip);
 
         // If photon 0 differenced up to photon 100 before hitting the
         // window size, then I know for sure that photon 1 will also
@@ -101,8 +104,10 @@ double * timeDifference_fast(double *photonTimes, double *photonWeights,
         // "skip" impliments this skipping.
 
         // Quickly loop through the photons that I already know are okay.
-        for (int jj = ii + 1; jj < skip - 1; jj++)
+        for (int jj = ii + 1; jj < (int)fmin(ii + skip, nPhotons); jj++)
         {
+            // printf("In first loop. Skip is %d\n", skip);
+            // printf("jj is: %d\n", jj);
             // Calculate the time difference  
             photonDiff = photonTimes[jj] - photonTimes[ii];
 
@@ -114,16 +119,23 @@ double * timeDifference_fast(double *photonTimes, double *photonWeights,
         }
 
         // Loop through additional photons.
-        for (int jj = skip; jj < nPhotons; jj++)
+        for (int jj = ii + skip; jj < nPhotons; jj++)
         {
+            // printf("In second loop. Skip is %d\n", skip);
+            // printf("jj is %d\n", jj);
 
             // Calculate the time difference  
             photonDiff = photonTimes[jj] - photonTimes[ii];
+            // printf("photonDiff is: %f\n", photonDiff);
 
             // Exit this second loop if the time difference is too large
             if (photonDiff >= windowSize)
-                skip = jj;
+            {
+                // printf("Exiting. Photon diff is %d, window size is %d.\n", photonDiff, windowSize);
+                skip = jj - ii - 1;
+                //printf("skip at exit is %d\n", skip);
                 break;
+            }
 
             // Otherwise, calculate the frequency bin
             freqBin = floor(photonDiff / timeResol);
@@ -141,22 +153,26 @@ double * timeDifference_fast(double *photonTimes, double *photonWeights,
 void main(void){}
 
 // void main(void){
-//     double testArray[] = {1, 1.01, 1.5, 2, 3, 4, 5, 6};
-//     double testWeights[] = {1, 1, 1, 2, 3, 4, 5, 6};
+//     double testArray[] = {1, 1.01, 1.02, 1.5, 2, 3, 4, 5, 6};
+//     double testWeights[] = {1, 1, 1, 1, 2, 3, 4, 5, 6};
 //     int windowSize = 2;
 //     double maxFreq = 1;
-//     int nphotons = 8;
+//     int nphotons = 9;
 //     int size;
-//     double *histogram
+//     double *histogram;
+//     double *histogram2;
 
 //     histogram = timeDifference(testArray, testWeights, 
 //                                windowSize, maxFreq, nphotons);
+
+//     histogram2 = timeDifference_fast(testArray, testWeights, 
+//                                     windowSize, maxFreq, nphotons);
 
 //     size = fftSize(windowSize, maxFreq);
 
 //     for (int ii=0; ii < size; ii++)
 //     {
-//         printf("%f ", histogram[ii]);
+//         printf("%f vs %f\n", histogram[ii], histogram2[ii]);
 //     }
 
 //     return;
