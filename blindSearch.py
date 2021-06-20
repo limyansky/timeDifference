@@ -66,13 +66,78 @@ def main():
                         default=None,
                         help='The name of the weights column in FT1_file')
 
+    parser.add_argument('--lower_p1_p0',
+                        nargs='?',
+                        default=0,
+                        help='The lower bound of p1/p0 in s^-1')
+
+    parser.add_argument('--upper_p1_p0',
+                        nargs='?',
+                        default=1.3e-11,
+                        help='The upper bound of p1/p0 in s^-1')
+
+    parser.add_argument('--wisdom_file',
+                        nargs='?',
+                        default=None,
+                        help='Where to save and load pyfftw\'s wisdom file')
+
     # Extract the arguments from the parser
     args = parser.parse_args()
 
+    # Read in the times and weights
     times, weights = readEvents(args.FT1_file, args.weight_column)
 
-    timeDiffs = call_CtimeDiff(CtimeDiff, times, weights)
-    print(timeDiffs)
+    # Setup a basic search grid in -f1/f0
+    p1_p0_step = GetP1_P0Step(times, args.window_size, args.max_freq)
+    p1_p0_list = GetP1_P0List(p1_p0_step, args.lower_p1_p0, args.upper_p1_p0)
+
+    # Begin the search process
+    # Keep track of how many steps we have done
+    step = 0
+    OverallBest = [0, 0, 1]
+
+    # Step through the list of p1_p0
+    for p1_p0 in p1_p0_list:
+
+        # Update the step number
+        step += 1
+
+        # Correct the times
+        new_times = TimeWarp(times, p1_p0, args.epoch)
+
+        # Find the time differences
+        time_differences = call_CtimeDiff(CtimeDiff,
+                                          new_times,
+                                          weights,
+                                          windowSize=args.window_size,
+                                          maxFreq=args.max_freq)
+
+        # Load the pyfftw wisdom file
+        LoadWisdom(args.wisdom_file)
+
+        # run the FFTW
+        power_spectrum = FFTW_Transform(time_differences,
+                                        args.window_size,
+                                        args.max_freq)
+
+        # Save the wisdom file
+        SaveWisdom(args.wisdom_file)
+
+        # Extract the best candidate
+        [freq, p_value] = ExtractBestCandidate(power_spectrum,
+                                               args.min_freq,
+                                               args.max_freq)
+
+        # Print the candidate
+        DisplayCandidate([freq, p1_p0, p_value])
+
+        # If the candidate is the overall best, store it
+        if p_value <= OverallBest[2]:
+            OverallBest = [freq, p1_p0, p_value]
+
+    # Show a summary of the search
+    print("\nScan in -f1/f0 completed after %d steps" % (len(p1_p0_list)))
+    DisplayCandidate(OverallBest, best=True)
 
     return 0
 
@@ -130,7 +195,7 @@ def readEvents(FT1_file, weight_column=None):
 
 
 # A function to call the C code which performs the time differencing
-def call_CtimeDiff(function, photons, weights, windowSize=524288, maxFreq=68):
+def call_CtimeDiff(function, photons, weights, windowSize=524288, maxFreq=64):
     """
     Call a C function to quickly calculate time differences.
 
