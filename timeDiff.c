@@ -1,10 +1,77 @@
 #include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include "mkl_lapacke.h"
 
 double * timeDifference(double *, double*, int, int, int);
 double * timeDifference_fast(double *, double*, int, int, int);
 int fftSize(int, int);
+double * linearFit(double *, int, int);
+
+// Perform a linear fit to a sorted power array
+double * linearFit(double * sortPower, int powerSize, int output){
+
+    // A fast way of performing least squares linear regression: 
+    // Ax = B
+    // Where I want to end up with a solution of the form y = mx + b
+    // A is of the form [1, power1,
+    //                   1, power2, 
+    //                   1, power3]
+    // x is of the form [b,
+    //                   m]
+    // B is of the form [0,
+    //                   1,
+    //                   2]
+
+    // Initialize MKL integers for use in the mkl function
+    // rows: The number of rows in A, the same as the number of power values
+    // columns: the number of columns in A, which will be 2 [1, POWER_VALUE]
+    // nrhs: The number of columns in B, which will be 1
+    // lda: The leading dimension of A, equal to max(1, columns) for row major, or 2
+    // ldb: THe leading dimension of B, equal 1.
+    MKL_INT rows = powerSize, columns = 2, nrhs = 1, lda = 2, ldb = 1, info;
+
+    // A place to store the input and output matrices
+    double *A;
+    double *B;
+
+    // Add a leading column of 1's
+    // Even though in our example A has 2 columns, the lapacke function
+    // takes in a single long vector and wraps it appropriately
+    A = (double *)calloc(2 * powerSize, sizeof(double*));
+
+    // This is how to create a powerSize array
+    B = (double *)calloc(powerSize, sizeof(double));
+
+    // Fill the arrays.
+    for (int ii = 0; ii < powerSize; ii++){
+        // Just a list of ascending values.
+        B[ii] = ii;
+    }
+
+    // Create the vector for a that will be appropriately wrapped
+    for (int ii = 0; ii < 2*powerSize; ii+=2){
+        A[ii] = 1;
+        A[ii + 1] = sortPower[ii];
+
+    }
+
+
+
+    // Solve the linear system
+    info = LAPACKE_dgels(LAPACK_ROW_MAJOR, 'N', rows, columns, nrhs, A, lda, B, ldb);
+
+
+    /* Check for the full rank */
+    if( info > 0 ) {
+            printf( "The diagonal element %i of the triangular factor ", info );
+            printf( "of A is zero, so that A does not have full rank;\n" );
+            printf( "the least squares solution could not be computed.\n" );
+            exit( 1 );
+    }
+
+    return B;
+}
 
 // Calculate the size of an FFT
 int fftSize(int windowSize, int maxFreq){
