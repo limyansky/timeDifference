@@ -1,15 +1,15 @@
 #include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include "mkl_lapacke.h"
+#include "mkl.h"
 
 double * timeDifference(double *, double*, int, int, int);
 double * timeDifference_fast(double *, double*, int, int, int);
 int fftSize(int, int);
-double * linearFit(double *, int, int);
+double * linearFit(double *, int);
 
 // Perform a linear fit to a sorted power array
-double * linearFit(double * sortPower, int powerSize, int output){
+double * linearFit(double * sortPower, int powerSize){
 
     // A fast way of performing least squares linear regression: 
     // Ax = B
@@ -22,6 +22,8 @@ double * linearFit(double * sortPower, int powerSize, int output){
     // B is of the form [0,
     //                   1,
     //                   2]
+
+    printf("Calling linearFit");
 
     // Initialize MKL integers for use in the mkl function
     // rows: The number of rows in A, the same as the number of power values
@@ -43,12 +45,27 @@ double * linearFit(double * sortPower, int powerSize, int output){
     // This is how to create a powerSize array
     B = (double *)calloc(powerSize, sizeof(double));
 
+    // This may take a lot of memory. I should check that it is all okay. 
+    // if memory cannot be allocated
+    if(A == NULL)                     
+    {
+        printf("Creation of B didn't work.");
+        exit(0);
+    }
+    if(B == NULL)                     
+    {
+        printf("Creation of B didn't work.");
+        exit(0);
+    }
+
+    printf("Filling B");
     // Fill the arrays.
     for (int ii = 0; ii < powerSize; ii++){
         // Just a list of ascending values.
         B[ii] = ii;
     }
 
+    printf("Filling A");
     // Create the vector for a that will be appropriately wrapped
     for (int ii = 0; ii < 2*powerSize; ii+=2){
         A[ii] = 1;
@@ -57,7 +74,7 @@ double * linearFit(double * sortPower, int powerSize, int output){
     }
 
 
-
+    printf("Calling the fitter.");
     // Solve the linear system
     info = LAPACKE_dgels(LAPACK_ROW_MAJOR, 'N', rows, columns, nrhs, A, lda, B, ldb);
 
@@ -139,6 +156,7 @@ double * timeDifference_fast(double *photonTimes, double *photonWeights,
     double photonDiff;
     int freqBin;
     int skip=1;
+    printf("test print.");
 
     //Calculate the time resolution
     timeResol = 0.5 / maxFreq;
@@ -217,7 +235,7 @@ double * timeDifference_fast(double *photonTimes, double *photonWeights,
 
 }
 
-void main(void){}
+// void main(void){}
 
 // void main(void){
 //     double testArray[] = {1, 1.01, 1.02, 1.5, 2, 3, 4, 5, 6};
@@ -244,3 +262,14 @@ void main(void){}
 
 //     return;
 // }
+
+
+void main(void){
+    double testX[] = {1, 2, 3, 4, 5, 6};
+    int length = 5;
+    double * output;
+
+    output = linearFit(testX, length);
+
+    return;
+}

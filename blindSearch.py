@@ -24,8 +24,9 @@ import pickle
 import tracemalloc
 
 # Prepare the C code
-timeDifference = CDLL('/home/brent/github/timeDifference/timeDiff.so')
+timeDifference = CDLL('/home/brent/github/timeDifference/test.so')
 CtimeDiff = timeDifference.timeDifference_fast
+Clinear = timeDifference.linearFit
 
 
 # The function that will be run when the script is called
@@ -104,7 +105,7 @@ def main():
     step = 0
     OverallBest = [0, 0, 1]
 
-    #tracemalloc.start()
+    tracemalloc.start()
 
     save_wisdom = False
     load_wisdom = False
@@ -123,26 +124,21 @@ def main():
         # Update the step number
         step += 1
 
-        print('Correcting times.')
         # Correct the times
         new_times = TimeWarp(times, p1_p0, epoch)
-        print('Times corrected.')
 
-        print('Calculating differences.')
         # Find the time differences
         time_differences = call_CtimeDiff(CtimeDiff,
                                           new_times,
                                           weights,
                                           windowSize=args.window_size,
                                           maxFreq=args.max_freq)
-        print('Differences calculated.')
 
         # Load the pyfftw wisdom file
         if load_wisdom:
             LoadWisdom(args.wisdom_file)
             load_wisdom = False
 
-        print('Time for pyfftw.')
         # run the FFTW
         power_spectrum = FFTW_Transform(time_differences,
                                         args.window_size,
@@ -152,23 +148,18 @@ def main():
             SaveWisdom(args.wisdom_file)
             save_wisdom = False
 
-        print('Finished pyfftw.')
-
         if save_wisdom:
             # Save the wisdom file
             SaveWisdom(args.wisdom_file)
 
-        print('Begin Extraction.')
         # Extract the best candidate
         [freq, p_value] = ExtractBestCandidate(power_spectrum,
                                                args.min_freq,
                                                args.max_freq)
-        print('Finished Extraction.')
         # Print the candidate
         DisplayCandidate([freq, p1_p0, p_value])
 
-        print('Time to print the memory usage.')
-        #print(tracemalloc.take_snapshot())
+        print(tracemalloc.take_snapshot())
         # If the candidate is the overall best, store it
         if p_value <= OverallBest[2]:
             OverallBest = [freq, p1_p0, p_value]
@@ -266,6 +257,33 @@ def call_CtimeDiff(function, photons, weights, windowSize=524288, maxFreq=64):
     histogram = np.frombuffer(histogram.contents)
 
     return histogram
+
+
+# A function to call the C code whic performa a linear fit
+def call_Clinear(function, sortedPower):
+    """
+    Description
+
+    Parameters:
+    """
+
+    print('Specifying arg and res types')
+    # Specify the datatypes that will be sued as inputs
+    function.argtypes = [POINTER(c_double), c_int]
+    function.restype = POINTER(c_double * 2)
+
+    print('converting the array into a c double pointer')
+    # Convert the input into something C can read
+    CsortedPower = (c_double * len(sortedPower))(*sortedPower)
+
+    print('calling the function.')
+    # Run the function
+    output = function(CsortedPower, len(sortedPower))
+
+    # Print the output
+    print(output)
+
+
 
 
 # Find the appropriate step in P1/P0
@@ -428,14 +446,10 @@ def ExtractBestCandidate(power_spectrum, min_freq, max_freq):
     peak_index = min_index + np.argmax(power_spectrum[min_index:])
 
     # We need this operation of CPU complexity NlogN to interpret the power
-    print("Sorting the thingy.")
     sorted_power = np.sort(power_spectrum[min_index:], kind='heapsort')[::-1]
-    print("Finished sorting.")
 
-    print("Fitting the tail")
     # Work out the asymptotic cumulative distribution of the power values
     [slope, constant] = FitExponentialTail(sorted_power)
-    print("Finished fitting tail.")
 
     # Apply the asymptotic results to convert the power into a P-value
     P_value = PowerToPValue(sorted_power[0], slope, constant)
@@ -452,6 +466,7 @@ def FitExponentialTail(sorted_array):
     Parameters:
         sorted_array: A sorted power spectrum from pyfftw
     """
+    print('start_fit')
 
     # We define the tail through an emprical approximation
     if len(sorted_array) > 2000000:
@@ -465,8 +480,23 @@ def FitExponentialTail(sorted_array):
     X_values = sorted_array[start_index:end_index]
     Y_values = np.log(np.arange(start_index + 1, end_index + 1))
 
+    # Find the correlation between x and y
+    correlation = np.corrcoef(X_values, Y_values)[0, 1]
+    std_X = np.std(X_values)
+    std_Y = np.std(Y_values)
+
+    # Find the slope
+    slope = correlation * (std_Y/std_X)
+
+    intercept = np.mean(Y_values) - (slope * np.mean(X_values))
+
+    #print('calling call_Clinear')
+    #call_Clinear(Clinear, X_values)
+    #print('finished call_Clinear')
+
     # this is a bit overkilling: a line is a polynomial of order 1
-    return np.polyfit(X_values, Y_values, 1)
+    #return np.polyfit(X_values, Y_values, 1)
+    return [slope, intercept]
 
 
 def PowerToPValue(power, slope, constant):
@@ -484,7 +514,8 @@ def PowerToPValue(power, slope, constant):
     # this value accounts already for the trials due to FFT bins
     # it comes from an empirical fit, and is very approximative
     effective_power = power - np.sqrt(power)
-    return np.amin([np.exp(constant + slope * effective_power), 1])
+    print(np.exp(constant + slope * effective_power))
+    return np.min([np.exp(constant + slope * effective_power), 1])
 
 
 def DisplayCandidate(candidate, best=False):
