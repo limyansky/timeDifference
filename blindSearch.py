@@ -10,7 +10,7 @@ import numpy as np
 from astropy.io import fits
 
 # Allows for importing C code
-from ctypes import CDLL, c_int, c_double, POINTER
+from ctypes import CDLL, c_int, c_double, POINTER, c_float
 
 # The fourier transform code
 import pyfftw
@@ -21,13 +21,15 @@ import os
 # Savig wisdom files
 import pickle
 
+import timeit
+
 import tracemalloc
 
 # Prepare the C code
-timeDifference = CDLL('/home/brent/github/timeDifference/test.so')
+timeDifference = CDLL('/home/brent/github/timeDifference/timeDiff.so')
 CtimeDiff = timeDifference.timeDifference_fast
-Clinear = timeDifference.linearFit
-
+#Clinear = timeDifference.linearFit
+Csort = timeDifference.wrap_qsort
 
 # The function that will be run when the script is called
 def main():
@@ -105,7 +107,7 @@ def main():
     step = 0
     OverallBest = [0, 0, 1]
 
-    tracemalloc.start()
+    #tracemalloc.start()
 
     save_wisdom = False
     load_wisdom = False
@@ -126,6 +128,7 @@ def main():
 
         # Correct the times
         new_times = TimeWarp(times, p1_p0, epoch)
+        print('Times size: ', new_times.nbytes/1000000, 'Mb')
 
         # Find the time differences
         time_differences = call_CtimeDiff(CtimeDiff,
@@ -133,6 +136,7 @@ def main():
                                           weights,
                                           windowSize=args.window_size,
                                           maxFreq=args.max_freq)
+        print('DIfferences size: ', time_differences.nbytes/1000000, 'Mb')
 
         # Load the pyfftw wisdom file
         if load_wisdom:
@@ -143,6 +147,7 @@ def main():
         power_spectrum = FFTW_Transform(time_differences,
                                         args.window_size,
                                         args.max_freq)
+        print('Power spectrum: ', power_spectrum.nbytes/1000000, 'Mb')
 
         if save_wisdom:
             SaveWisdom(args.wisdom_file)
@@ -159,7 +164,7 @@ def main():
         # Print the candidate
         DisplayCandidate([freq, p1_p0, p_value])
 
-        print(tracemalloc.take_snapshot())
+        #print(tracemalloc.take_snapshot())
         # If the candidate is the overall best, store it
         if p_value <= OverallBest[2]:
             OverallBest = [freq, p1_p0, p_value]
@@ -284,6 +289,22 @@ def call_Clinear(function, sortedPower):
     print(output)
 
 
+def call_Csort(function, toSort):
+    """
+    Description
+
+    Parameters:
+    """
+
+    # Define the inputs and outputs
+    function.argtypes = [POINTER(c_float), c_int]
+    function.restype = POINTER(c_float)
+
+    # Convert the input into something C can read
+    CtoSort = (c_float * len(toSort))(*toSort)
+
+    # Call the funciton
+    toSort = function(CtoSort, len(toSort))
 
 
 # Find the appropriate step in P1/P0
@@ -437,6 +458,7 @@ def ExtractBestCandidate(power_spectrum, min_freq, max_freq):
         max_freq: The largest frequency to search
 
     """
+    print(type(power_spectrum[0]))
 
     # This value is roughly correct, though FFT_resol := 1/window_size
     FFT_resol = float(max_freq) / (len(power_spectrum) - 1.0)
@@ -445,14 +467,22 @@ def ExtractBestCandidate(power_spectrum, min_freq, max_freq):
     min_index = int(np.floor(float(min_freq) / FFT_resol))
     peak_index = min_index + np.argmax(power_spectrum[min_index:])
 
+    power_spectrum = power_spectrum[min_index:]
+
     # We need this operation of CPU complexity NlogN to interpret the power
-    sorted_power = np.sort(power_spectrum[min_index:], kind='heapsort')[::-1]
+    power_spectrum = np.sort(power_spectrum[min_index:], kind='heapsort')[::-1]
+
+    # start = timeit.default_timer()
+    # call_Csort(Csort, power_spectrum)
+    # power_spectrum = power_spectrum[::-1]
+    # end = timeit.default_timer()
+    # print('qsort done in ', end - start, ' seconds')
 
     # Work out the asymptotic cumulative distribution of the power values
-    [slope, constant] = FitExponentialTail(sorted_power)
+    [slope, constant] = FitExponentialTail(power_spectrum)
 
     # Apply the asymptotic results to convert the power into a P-value
-    P_value = PowerToPValue(sorted_power[0], slope, constant)
+    P_value = PowerToPValue(power_spectrum[0], slope, constant)
 
     return [FFT_resol * peak_index, P_value]
 

@@ -1,94 +1,130 @@
 #include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include "mkl.h"
+//#include "mkl.h"
 
 double * timeDifference(double *, double*, int, int, int);
 double * timeDifference_fast(double *, double*, int, int, int);
 int fftSize(int, int);
-double * linearFit(double *, int);
+// double * linearFit(double *, int);
+void wrap_qsort(float *, int);
+int cmpfunc(const void *, const void *);
+
+
+// We need a function to pass to qsort. This is it.
+// I got this from stack exchange
+// https://stackoverflow.com/questions/27284185/how-does-the-compare-function-in-qsort-work
+int cmpfunc (const void * a, const void * b)
+{
+   // qsort() passes in `void*` types because it can't know the actual types being sorted
+   // convert those pointers to pointers to int and deref them to get the actual int values
+
+   float val1 = *(float*)a;
+   float val2 = *(float*)b;
+
+   // qsort() expects the comparison function to return:
+   // 
+   //    a negative result if val1 < val2
+   //    0 if val1 == val2
+   //    a positive result if val1 > val2
+
+   return ( val1 - val2 ); 
+}
+
+// Wrap qsort so it can be easily called from python.
+void wrap_qsort (float * input, int size){
+
+    // Not much to do here. Just call qsort
+    qsort(input, size, sizeof(float), cmpfunc);
+}
+
 
 // Perform a linear fit to a sorted power array
-double * linearFit(double * sortPower, int powerSize){
+// But, don't actually use this function. It is much faster to calculate
+// the slope and Y-intercept from the correlation and standard deviations
+// of the datapoints.
 
-    // A fast way of performing least squares linear regression: 
-    // Ax = B
-    // Where I want to end up with a solution of the form y = mx + b
-    // A is of the form [1, power1,
-    //                   1, power2, 
-    //                   1, power3]
-    // x is of the form [b,
-    //                   m]
-    // B is of the form [0,
-    //                   1,
-    //                   2]
+// // Also, this is WRONG. B needs to fill with the log of ii or something.
+// double * linearFit(double * sortPower, int powerSize){
 
-    printf("Calling linearFit");
+//     // A fast way of performing least squares linear regression: 
+//     // Ax = B
+//     // Where I want to end up with a solution of the form y = mx + b
+//     // A is of the form [1, power1,
+//     //                   1, power2, 
+//     //                   1, power3]
+//     // x is of the form [b,
+//     //                   m]
+//     // B is of the form [0,
+//     //                   1,
+//     //                   2]
 
-    // Initialize MKL integers for use in the mkl function
-    // rows: The number of rows in A, the same as the number of power values
-    // columns: the number of columns in A, which will be 2 [1, POWER_VALUE]
-    // nrhs: The number of columns in B, which will be 1
-    // lda: The leading dimension of A, equal to max(1, columns) for row major, or 2
-    // ldb: THe leading dimension of B, equal 1.
-    MKL_INT rows = powerSize, columns = 2, nrhs = 1, lda = 2, ldb = 1, info;
+//     printf("Calling linearFit");
 
-    // A place to store the input and output matrices
-    double *A;
-    double *B;
+//     // Initialize MKL integers for use in the mkl function
+//     // rows: The number of rows in A, the same as the number of power values
+//     // columns: the number of columns in A, which will be 2 [1, POWER_VALUE]
+//     // nrhs: The number of columns in B, which will be 1
+//     // lda: The leading dimension of A, equal to max(1, columns) for row major, or 2
+//     // ldb: THe leading dimension of B, equal 1.
+//     MKL_INT rows = powerSize, columns = 2, nrhs = 1, lda = 2, ldb = 1, info;
 
-    // Add a leading column of 1's
-    // Even though in our example A has 2 columns, the lapacke function
-    // takes in a single long vector and wraps it appropriately
-    A = (double *)calloc(2 * powerSize, sizeof(double*));
+//     // A place to store the input and output matrices
+//     double *A;
+//     double *B;
 
-    // This is how to create a powerSize array
-    B = (double *)calloc(powerSize, sizeof(double));
+//     // Add a leading column of 1's
+//     // Even though in our example A has 2 columns, the lapacke function
+//     // takes in a single long vector and wraps it appropriately
+//     A = (double *)calloc(2 * powerSize, sizeof(double*));
 
-    // This may take a lot of memory. I should check that it is all okay. 
-    // if memory cannot be allocated
-    if(A == NULL)                     
-    {
-        printf("Creation of B didn't work.");
-        exit(0);
-    }
-    if(B == NULL)                     
-    {
-        printf("Creation of B didn't work.");
-        exit(0);
-    }
+//     // This is how to create a powerSize array
+//     B = (double *)calloc(powerSize, sizeof(double));
 
-    printf("Filling B");
-    // Fill the arrays.
-    for (int ii = 0; ii < powerSize; ii++){
-        // Just a list of ascending values.
-        B[ii] = ii;
-    }
+//     // This may take a lot of memory. I should check that it is all okay. 
+//     // if memory cannot be allocated
+//     if(A == NULL)                     
+//     {
+//         printf("Creation of B didn't work.");
+//         exit(0);
+//     }
+//     if(B == NULL)                     
+//     {
+//         printf("Creation of B didn't work.");
+//         exit(0);
+//     }
 
-    printf("Filling A");
-    // Create the vector for a that will be appropriately wrapped
-    for (int ii = 0; ii < 2*powerSize; ii+=2){
-        A[ii] = 1;
-        A[ii + 1] = sortPower[ii];
+//     printf("Filling B");
+//     // Fill the arrays.
+//     for (int ii = 0; ii < powerSize; ii++){
+//         // Just a list of ascending values.
+//         B[ii] = ii;
+//     }
 
-    }
+//     printf("Filling A");
+//     // Create the vector for a that will be appropriately wrapped
+//     for (int ii = 0; ii < 2*powerSize; ii+=2){
+//         A[ii] = 1;
+//         A[ii + 1] = sortPower[ii];
 
-
-    printf("Calling the fitter.");
-    // Solve the linear system
-    info = LAPACKE_dgels(LAPACK_ROW_MAJOR, 'N', rows, columns, nrhs, A, lda, B, ldb);
+//     }
 
 
-    /* Check for the full rank */
-    if( info > 0 ) {
-            printf( "The diagonal element %i of the triangular factor ", info );
-            printf( "of A is zero, so that A does not have full rank;\n" );
-            printf( "the least squares solution could not be computed.\n" );
-            exit( 1 );
-    }
+//     printf("Calling the fitter.");
+//     // Solve the linear system
+//     info = LAPACKE_dgels(LAPACK_ROW_MAJOR, 'N', rows, columns, nrhs, A, lda, B, ldb);
 
-    return B;
-}
+
+//     /* Check for the full rank */
+//     if( info > 0 ) {
+//             printf( "The diagonal element %i of the triangular factor ", info );
+//             printf( "of A is zero, so that A does not have full rank;\n" );
+//             printf( "the least squares solution could not be computed.\n" );
+//             exit( 1 );
+//     }
+
+//     return B;
+// }
 
 // Calculate the size of an FFT
 int fftSize(int windowSize, int maxFreq){
@@ -235,7 +271,7 @@ double * timeDifference_fast(double *photonTimes, double *photonWeights,
 
 }
 
-// void main(void){}
+void main(void){}
 
 // void main(void){
 //     double testArray[] = {1, 1.01, 1.02, 1.5, 2, 3, 4, 5, 6};
@@ -264,12 +300,12 @@ double * timeDifference_fast(double *photonTimes, double *photonWeights,
 // }
 
 
-void main(void){
-    double testX[] = {1, 2, 3, 4, 5, 6};
-    int length = 5;
-    double * output;
+// void main(void){
+//     double testX[] = {1, 2, 3, 4, 5, 6};
+//     int length = 5;
+//     double * output;
 
-    output = linearFit(testX, length);
+//     output = linearFit(testX, length);
 
-    return;
-}
+//     return;
+// }
