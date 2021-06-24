@@ -137,6 +137,7 @@ def main():
                                           windowSize=args.window_size,
                                           maxFreq=args.max_freq)
         print('DIfferences size: ', time_differences.nbytes/1000000, 'Mb')
+        print(np.count_nonzero(time_differences), '/', len(time_differences))
 
         # Load the pyfftw wisdom file
         if load_wisdom:
