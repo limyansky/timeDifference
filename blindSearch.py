@@ -23,7 +23,11 @@ import pickle
 
 import timeit
 
-import tracemalloc
+from guppy import hpy
+
+h = hpy()
+print(h.heap())
+
 
 # Prepare the C code
 timeDifference = CDLL('/home/brent/github/timeDifference/timeDiff.so')
@@ -119,6 +123,16 @@ def main():
         save_wisdom = True
 
 
+    # Load the pyfftw wisdom file
+    if load_wisdom:
+        LoadWisdom(args.wisdom_file)
+        load_wisdom = False
+
+    # Initalize the pyFFTW object
+    fftw_object, input_array, output_array = init_FFTW(args.window_size,
+                                                       args.max_freq)
+
+
     # Step through the list of p1_p0
     for p1_p0 in p1_p0_list:
         print('step: ', step)
@@ -128,36 +142,33 @@ def main():
 
         # Correct the times
         new_times = TimeWarp(times, p1_p0, epoch)
-        print('Times size: ', new_times.nbytes/1000000, 'Mb')
 
+        print("Calculating time differences.")
         # Find the time differences
         time_differences = call_CtimeDiff(CtimeDiff,
                                           new_times,
                                           weights,
                                           windowSize=args.window_size,
                                           maxFreq=args.max_freq)
-        print('DIfferences size: ', time_differences.nbytes/1000000, 'Mb')
-        print(np.count_nonzero(time_differences), '/', len(time_differences))
 
-        # Load the pyfftw wisdom file
-        if load_wisdom:
-            LoadWisdom(args.wisdom_file)
-            load_wisdom = False
+        # # Load the pyfftw wisdom file
+        # if load_wisdom:
+        #     LoadWisdom(args.wisdom_file)
+        #     load_wisdom = False
 
+        print("Calculating the power spectrum")
         # run the FFTW
-        power_spectrum = FFTW_Transform(time_differences,
-                                        args.window_size,
-                                        args.max_freq)
-        print('Power spectrum: ', power_spectrum.nbytes/1000000, 'Mb')
+        # power_spectrum = FFTW_Transform(time_differences,
+        #                                 args.window_size,
+        #                                 args.max_freq)
+        power_spectrum = run_FFTW(fftw_object, input_array, output_array,
+                                  time_differences)
 
         if save_wisdom:
             SaveWisdom(args.wisdom_file)
             save_wisdom = False
 
-        if save_wisdom:
-            # Save the wisdom file
-            SaveWisdom(args.wisdom_file)
-
+        print("Extracting candidates")
         # Extract the best candidate
         [freq, p_value] = ExtractBestCandidate(power_spectrum,
                                                args.min_freq,
@@ -170,9 +181,13 @@ def main():
         if p_value <= OverallBest[2]:
             OverallBest = [freq, p1_p0, p_value]
 
+        # Print the memory usage
+        print(h.heap())
+
     # Show a summary of the search
     print("\nScan in -f1/f0 completed after %d steps" % (len(p1_p0_list)))
     DisplayCandidate(OverallBest, best=True)
+
 
     return 0
 
@@ -403,6 +418,48 @@ def SaveWisdom(wisdom_file):
         pickle.dump(pyfftw.export_wisdom(), f)
         print('Saved pickled wisdom.')
 
+# Initalize the inputs and outputs of the fft
+def init_FFTW(window_size, max_freq):
+
+    # Calculate the size of the fft
+    FFT_size = FFT_Size(window_size, max_freq)
+    alignment = pyfftw.simd_alignment
+
+    # this is tricky: it is needed to get the correct memory alignment for fftw
+    input_array = pyfftw.n_byte_align_empty(FFT_size,
+                                            alignment,
+                                            dtype='float32')
+    output_array = pyfftw.n_byte_align_empty(FFT_size // 2 + 1,
+                                             alignment,
+                                             dtype='complex64')
+
+    # create the FFT object, BEFORE actually loading the data!!!!
+    fft_object = pyfftw.FFTW(input_array, output_array, threads=1)
+
+    # Return the object, input array, and output array
+    return fft_object, input_array, output_array
+
+
+def run_FFTW(fft_object, input_array, output_array, time_differences):
+    # load the actual input into the allocated memory
+    input_array[:] = time_differences
+
+    # this normalization grants that, if the input array is Poisson
+    # distributed,
+    # the Fourier power follows a chi2 distribution with 2 degrees of freedom
+    # unfortunately the time differences are NOT Poisson distributed...
+    norm = np.sum(np.absolute(input_array) / 2.0, dtype=np.float32)
+
+    # FFTW.__Call__ automatically executes the FFT and returns the output array
+    #output_array = fft_object()
+    fft_object()
+
+    #print("Deleting input")
+    #del input_array
+
+    # return the normalized Fourier power
+    return np.square(np.absolute(output_array)) / norm
+
 
 # Run fftw
 def FFTW_Transform(time_differences, window_size, max_freq):
@@ -440,7 +497,11 @@ def FFTW_Transform(time_differences, window_size, max_freq):
     norm = np.sum(np.absolute(input_array) / 2.0, dtype=np.float32)
 
     # FFTW.__Call__ automatically executes the FFT and returns the output array
-    output_array = fft_object()
+    #output_array = fft_object()
+    fft_object()
+
+    #print("Deleting input")
+    #del input_array
 
     # return the normalized Fourier power
     return np.square(np.absolute(output_array)) / norm

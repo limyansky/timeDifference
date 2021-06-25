@@ -204,7 +204,6 @@ double * timeDifference_fast(double *photonTimes, double *photonWeights,
     double photonDiff;
     int freqBin;
     int skip=1;
-    printf("test print.");
 
     //Calculate the time resolution
     timeResol = 0.5 / maxFreq;
