@@ -23,11 +23,9 @@ import pickle
 
 import timeit
 
-from guppy import hpy
+import tracemalloc
 
-h = hpy()
-print(h.heap())
-
+import gc
 
 # Prepare the C code
 timeDifference = CDLL('/home/brent/github/timeDifference/timeDiff.so')
@@ -111,7 +109,7 @@ def main():
     step = 0
     OverallBest = [0, 0, 1]
 
-    #tracemalloc.start()
+    tracemalloc.start()
 
     save_wisdom = False
     load_wisdom = False
@@ -135,6 +133,9 @@ def main():
 
     # Step through the list of p1_p0
     for p1_p0 in p1_p0_list:
+
+        snap_start = tracemalloc.take_snapshot()
+
         print('step: ', step)
 
         # Update the step number
@@ -164,6 +165,7 @@ def main():
         power_spectrum = run_FFTW(fftw_object, input_array, output_array,
                                   time_differences)
 
+
         if save_wisdom:
             SaveWisdom(args.wisdom_file)
             save_wisdom = False
@@ -181,8 +183,13 @@ def main():
         if p_value <= OverallBest[2]:
             OverallBest = [freq, p1_p0, p_value]
 
-        # Print the memory usage
-        print(h.heap())
+        snap_end = tracemalloc.take_snapshot()
+
+        stats = snap_end.compare_to(snap_start, 'lineno')
+
+        for ii in stats[:5]:
+            print(ii)
+
 
     # Show a summary of the search
     print("\nScan in -f1/f0 completed after %d steps" % (len(p1_p0_list)))
@@ -426,12 +433,13 @@ def init_FFTW(window_size, max_freq):
     alignment = pyfftw.simd_alignment
 
     # this is tricky: it is needed to get the correct memory alignment for fftw
-    input_array = pyfftw.n_byte_align_empty(FFT_size,
-                                            alignment,
-                                            dtype='float32')
-    output_array = pyfftw.n_byte_align_empty(FFT_size // 2 + 1,
-                                             alignment,
-                                             dtype='complex64')
+    input_array = pyfftw.empty_aligned(FFT_size,
+                                       n=alignment,
+                                       dtype='flaot32')
+
+    output_array = pyfftw.empty_aligned(FFT_size // 2 + 1,
+                                        n=alignment,
+                                        dtype='complex64')
 
     # create the FFT object, BEFORE actually loading the data!!!!
     fft_object = pyfftw.FFTW(input_array, output_array, threads=1)
