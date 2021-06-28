@@ -294,6 +294,7 @@ def call_CtimeDiff(function, photons, weights, windowSize=524288, maxFreq=64):
 
     return histogram
 
+
 # A function to call the C code which performs the time differencing
 def call_CinPlace(function, photons, weights, windowSize=524288, maxFreq=64):
     """
@@ -312,9 +313,9 @@ def call_CinPlace(function, photons, weights, windowSize=524288, maxFreq=64):
     # Specify the datatypes that will be used as inputs
     function.argtypes = [POINTER(c_double), POINTER(c_double),
                          POINTER(c_double),
-                         c_int, c_int]
+                         c_int, c_int, c_int]
 
-    histogram = np.zeros(fftSize(windowSize, maxFreq))
+    histogram = np.zeros(FFT_Size(windowSize, maxFreq))
 
     # The photons and weights need to be converted into something C can read.
     cPhotons = (c_double * len(photons))(*photons)
@@ -322,13 +323,13 @@ def call_CinPlace(function, photons, weights, windowSize=524288, maxFreq=64):
     cHistogram = (c_double * len(histogram))(*histogram)
 
     # Calculate the time differences
-    function(cPhotons, cWeights, cHistogram, maxFreq, len(cPhotons))
+    function(cPhotons, cWeights, cHistogram,
+             windowSize, maxFreq, len(cPhotons))
 
     # The C output needs to be converted back into something python can read.
-    histogram = np.frombuffer(CHistogram.contents)
+    histogram = np.frombuffer(cHistogram.contents)
 
     return histogram
-
 
 
 # A function to call the C code whic performa a linear fit
