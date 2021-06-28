@@ -14,7 +14,7 @@
 
 double * timeDifference(double *, double*, int, int, int);
 double * timeDifference_fast(double *, double*, int, int, int);
-void timeDifference_inPlace(double *, double*, double*, int, int);
+void timeDifference_inPlace(double *, double*, double*, int, int, int);
 // double * timeDifference_multi(double *, double *, int, int, int, int, int);
 // double * timeDifference_multi(double *, double *, int, int, int, int, int);
 
@@ -198,7 +198,7 @@ double * timeDifference(double *photonTimes, double *photonWeights,
 // Calculates a histogram of time differences... quickly.
 void timeDifference_inPlace(double *photonTimes, double *photonWeights,
                             double *outHistogram,
-                            int maxFreq, int nPhotons){
+                            int windowSize, int maxFreq, int nPhotons){
 
     int nbins;
     float timeResol;
@@ -266,7 +266,7 @@ void timeDifference_inPlace(double *photonTimes, double *photonWeights,
         }
     }
 
-    return void;
+    return;
 
 }
 
