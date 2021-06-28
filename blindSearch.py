@@ -30,8 +30,10 @@ import gc
 # Prepare the C code
 timeDifference = CDLL('/home/brent/github/timeDifference/timeDiff.so')
 CtimeDiff = timeDifference.timeDifference_fast
+CinPlace  = timeDifference.timeDifference_inPlace
 #Clinear = timeDifference.linearFit
 Csort = timeDifference.wrap_qsort
+
 
 # The function that will be run when the script is called
 def main():
@@ -146,11 +148,17 @@ def main():
 
         print("Calculating time differences.")
         # Find the time differences
-        time_differences = call_CtimeDiff(CtimeDiff,
-                                          new_times,
-                                          weights,
-                                          windowSize=args.window_size,
-                                          maxFreq=args.max_freq)
+        # time_differences = call_CtimeDiff(CtimeDiff,
+        #                                   new_times,
+        #                                   weights,
+        #                                   windowSize=args.window_size,
+        #                                   maxFreq=args.max_freq)
+
+        time_differences = call_CinPlace(CinPlace,
+                                         new_times,
+                                         weights,
+                                         windowSize=args.window_size,
+                                         maxFreq=args.max_freq)
 
         # # Load the pyfftw wisdom file
         # if load_wisdom:
@@ -285,6 +293,42 @@ def call_CtimeDiff(function, photons, weights, windowSize=524288, maxFreq=64):
     histogram = np.frombuffer(histogram.contents)
 
     return histogram
+
+# A function to call the C code which performs the time differencing
+def call_CinPlace(function, photons, weights, windowSize=524288, maxFreq=64):
+    """
+    Call a C function to quickly calculate time differences.
+
+    Parameters:
+        function: The handler from ctypes to work with
+        photons: A list of photon times to difference
+        weights: A list of photon weights corresponding to the times
+
+    Keyword Arguments:
+        WindowSize: THe maximum time difference to include
+        maxFreq: The maximum frequency to search
+    """
+
+    # Specify the datatypes that will be used as inputs
+    function.argtypes = [POINTER(c_double), POINTER(c_double),
+                         POINTER(c_double),
+                         c_int, c_int]
+
+    histogram = np.zeros(fftSize(windowSize, maxFreq))
+
+    # The photons and weights need to be converted into something C can read.
+    cPhotons = (c_double * len(photons))(*photons)
+    cWeights = (c_double * len(weights))(*weights)
+    cHistogram = (c_double * len(histogram))(*histogram)
+
+    # Calculate the time differences
+    function(cPhotons, cWeights, cHistogram, maxFreq, len(cPhotons))
+
+    # The C output needs to be converted back into something python can read.
+    histogram = np.frombuffer(CHistogram.contents)
+
+    return histogram
+
 
 
 # A function to call the C code whic performa a linear fit
