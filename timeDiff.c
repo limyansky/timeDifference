@@ -266,7 +266,7 @@ void timeDifference_inPlace(double *photonTimes, double *photonWeights,
         }
     }
 
-    return void;
+    return;
 
 }
 
