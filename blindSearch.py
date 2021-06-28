@@ -435,7 +435,7 @@ def init_FFTW(window_size, max_freq):
     # this is tricky: it is needed to get the correct memory alignment for fftw
     input_array = pyfftw.empty_aligned(FFT_size,
                                        n=alignment,
-                                       dtype='flaot32')
+                                       dtype='float32')
 
     output_array = pyfftw.empty_aligned(FFT_size // 2 + 1,
                                         n=alignment,
