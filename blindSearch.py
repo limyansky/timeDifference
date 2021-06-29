@@ -18,8 +18,11 @@ import pyfftw
 # File io
 import os
 
-# Savig wisdom files
+# Saving wisdom files
 import pickle
+
+# Save the outputs as a csv file
+import csv
 
 # Useful for debugging
 # import timeit
@@ -104,6 +107,11 @@ def main():
                         nargs='?',
                         default=None,
                         help='Where to save and load pyfftw\'s wisdom file')
+
+    parser.add_argument('--out_file',
+                        nargs='?',
+                        default=None,
+                        help='Write the output to this file')
 
     # Extract the arguments from the parser
     args = parser.parse_args()
