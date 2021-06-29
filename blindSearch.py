@@ -204,18 +204,26 @@ def main():
 
 # Runs through a list of p1_p0 values
 def run_scan(times, weights,
-             window_size, max_freq, epoch,
+             window_size, min_freq, max_freq, epoch,
              p1_p0_list,
-             fft_input, fft_output,
-             save_wisdom=None, load_wisdom=None):
+             save_wisdom=None, load_wisdom=None,
+             out_file=None):
     """
     Runs a single search step in P1_P0
 
     Parameters:
-        Param1:
+        times: A list of photon times
+        weights: A list of photon weights
+        window_size: The maximum time difference, in seconds
+        max_freq: The maximum frequency to search
+        epoch: The epoch from which to correct photon times
+        p1_p0_lsit: A list of P1/P0 steps over which to search
 
     Keyword Arguments:
-        Argument 1:
+        save_wisdom: A place to save the fft wisdom file
+        load_wisdom: The location of a saved fft wisdom file
+        out_file: A place to save outputs in .csv format
+
     """
 
     # Load the wisdom file, if requested
@@ -223,7 +231,7 @@ def run_scan(times, weights,
         LoadWisdom(load_wisdom)
 
     # Initalize pyfftw
-    fftw_object, input_array, output_array = init_FFTW(window_size, max_freq)
+    fftw_object, fft_input, fft_output = init_FFTW(window_size, max_freq)
 
     for p1_p0 in p1_p0_list:
         # Correct the times
@@ -242,15 +250,19 @@ def run_scan(times, weights,
 
         # If needed, save the wisdom file
         if save_wisdom is not None:
+
+            # Save the wisdom file
             SaveWisdom(save_wisdom)
+
+            # Make sure we don't continue to save the wisdom file
+            save_wisdom = None
 
         # Extract the best candidate
         [freq, p_value] = ExtractBestCandidate(power_spectrum,
-                                               args.min_freq,
-                                               args.max_freq)
+                                               min_freq, max_freq)
 
         # Print the candidate
-        DisplayCandidate([freq, p1_p0, p_value])
+        DisplayCandidate([freq, p1_p0, p_value], out_file)
 
 
 # Calculates the size of the FFT
