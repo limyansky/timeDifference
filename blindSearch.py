@@ -605,7 +605,6 @@ def PowerToPValue(power, slope, constant):
     # this value accounts already for the trials due to FFT bins
     # it comes from an empirical fit, and is very approximative
     effective_power = power - np.sqrt(power)
-    print(np.exp(constant + slope * effective_power))
     return np.min([np.exp(constant + slope * effective_power), 1])
 
 
