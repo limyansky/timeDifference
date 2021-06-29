@@ -28,8 +28,11 @@ import pickle
 # kb.
 # print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 
-
+# Allows me to delete C object to free up memory
 from copy import deepcopy
+
+# Run the code on multiple cores
+import multiprocessing
 
 # Load the C library
 timeDifference = CDLL('/home/brent/github/timeDifference/timeDiff.so')
@@ -185,6 +188,57 @@ def main():
     DisplayCandidate(OverallBest, best=True)
 
     return 0
+
+
+# Runs through a list of p1_p0 values
+def run_scan(times, weights,
+             window_size, max_freq, epoch,
+             p1_p0_list,
+             fft_input, fft_output,
+             save_wisdom=None, load_wisdom=None):
+    """
+    Runs a single search step in P1_P0
+
+    Parameters:
+        Param1:
+
+    Keyword Arguments:
+        Argument 1:
+    """
+
+    # Load the wisdom file, if requested
+    if load_wisdom is not None:
+        LoadWisdom(load_wisdom)
+
+    # Initalize pyfftw
+    fftw_object, input_array, output_array = init_FFTW(window_size, max_freq)
+
+    for p1_p0 in p1_p0_list:
+        # Correct the times
+        new_times = TimeWarp(times, p1_p0, epoch)
+
+        # Find the time differences
+        time_differences = call_CtimeDiff(CtimeDiff,
+                                          new_times,
+                                          weights,
+                                          windowSize=window_size,
+                                          maxFreq=max_freq)
+
+        # run the FFTW
+        power_spectrum = run_FFTW(fftw_object, fft_input, fft_output,
+                                  time_differences)
+
+        # If needed, save the wisdom file
+        if save_wisdom is not None:
+            SaveWisdom(save_wisdom)
+
+        # Extract the best candidate
+        [freq, p_value] = ExtractBestCandidate(power_spectrum,
+                                               args.min_freq,
+                                               args.max_freq)
+
+        # Print the candidate
+        DisplayCandidate([freq, p1_p0, p_value])
 
 
 # Calculates the size of the FFT
