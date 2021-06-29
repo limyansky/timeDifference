@@ -21,25 +21,31 @@ import os
 # Savig wisdom files
 import pickle
 
-import timeit
+# Useful for debugging
+# import timeit
+# import resource
+# Example usage of memory usage debugging. This will print memory usage in
+# kb.
+# print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 
-import tracemalloc
-
-import gc
-
-import resource
 
 from copy import deepcopy
 
-# Prepare the C code
+# Load the C library
 timeDifference = CDLL('/home/brent/github/timeDifference/timeDiff.so')
+
+# Pull the relevant functions from the C library
 CtimeDiff = timeDifference.timeDifference_fast
-CinPlace  = timeDifference.timeDifference_inPlace
-#Clinear = timeDifference.linearFit
-Csort = timeDifference.wrap_qsort
 cleanup = timeDifference.cleanup
 
+# Varous functions that I've written, but haven't used
+# CinPlace  = timeDifference.timeDifference_inPlace
+# Clinear = timeDifference.linearFit
+# Csort = timeDifference.wrap_qsort
+
+# Setup the simple cleanup function
 cleanup.argtypes = [c_void_p]
+
 
 # The function that will be run when the script is called
 def main():
@@ -126,7 +132,6 @@ def main():
     elif args.wisdom_file is not None and not os.path.isfile(args.wisdom_file):
         save_wisdom = True
 
-
     # Load the pyfftw wisdom file
     if load_wisdom:
         LoadWisdom(args.wisdom_file)
@@ -136,7 +141,6 @@ def main():
     fftw_object, input_array, output_array = init_FFTW(args.window_size,
                                                        args.max_freq)
 
-
     # Step through the list of p1_p0
     for p1_p0 in p1_p0_list:
 
@@ -144,13 +148,9 @@ def main():
 
         # Update the step number
         step += 1
-        print("Starting. Memory usage: %s (kb)" % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+
         # Correct the times
         new_times = TimeWarp(times, p1_p0, epoch)
-
-        print("After timeWarp. Memory usage: %s (kb)" % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
-
-        print("Calculating time differences.")
 
         # Find the time differences
         time_differences = call_CtimeDiff(CtimeDiff,
@@ -159,45 +159,23 @@ def main():
                                           windowSize=args.window_size,
                                           maxFreq=args.max_freq)
 
-        print("After differences. Memory usage: %s (kb)" % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
-
-        # time_differences = call_CinPlace(CinPlace,
-        #                                  new_times,
-        #                                  weights,
-        #                                  windowSize=args.window_size,
-        #                                  maxFreq=args.max_freq)
-
-        # # Load the pyfftw wisdom file
-        # if load_wisdom:
-        #     LoadWisdom(args.wisdom_file)
-        #     load_wisdom = False
-
-        print("Calculating the power spectrum")
         # run the FFTW
-        # power_spectrum = FFTW_Transform(time_differences,
-        #                                 args.window_size,
-        #                                 args.max_freq)
         power_spectrum = run_FFTW(fftw_object, input_array, output_array,
                                   time_differences)
 
-        print("After power_spectrum. Memory usage: %s (kb)" % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
-
+        # If needed, save the wisdom file
         if save_wisdom:
             SaveWisdom(args.wisdom_file)
             save_wisdom = False
 
-        print("Extracting candidates")
         # Extract the best candidate
         [freq, p_value] = ExtractBestCandidate(power_spectrum,
                                                args.min_freq,
                                                args.max_freq)
 
-        print("After extraction. Memory usage: %s (kb)" % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
-
         # Print the candidate
         DisplayCandidate([freq, p1_p0, p_value])
 
-        #print(tracemalloc.take_snapshot())
         # If the candidate is the overall best, store it
         if p_value <= OverallBest[2]:
             OverallBest = [freq, p1_p0, p_value]
@@ -205,7 +183,6 @@ def main():
     # Show a summary of the search
     print("\nScan in -f1/f0 completed after %d steps" % (len(p1_p0_list)))
     DisplayCandidate(OverallBest, best=True)
-
 
     return 0
 
@@ -331,36 +308,9 @@ def call_CinPlace(function, photons, weights, windowSize=524288, maxFreq=64):
     function(cPhotons, cWeights, cHistogram,
              windowSize, maxFreq, len(cPhotons))
 
-    # The C output needs to be converted back into something python can read.
-    #histogram = np.frombuffer(cHistogram.contents)
     print(sum(histogram))
 
     return histogram
-
-
-# A function to call the C code whic performa a linear fit
-def call_Clinear(function, sortedPower):
-    """
-    Description
-
-    Parameters:
-    """
-
-    print('Specifying arg and res types')
-    # Specify the datatypes that will be sued as inputs
-    function.argtypes = [POINTER(c_double), c_int]
-    function.restype = POINTER(c_double * 2)
-
-    print('converting the array into a c double pointer')
-    # Convert the input into something C can read
-    CsortedPower = (c_double * len(sortedPower))(*sortedPower)
-
-    print('calling the function.')
-    # Run the function
-    output = function(CsortedPower, len(sortedPower))
-
-    # Print the output
-    print(output)
 
 
 def call_Csort(function, toSort):
@@ -510,11 +460,8 @@ def run_FFTW(fft_object, input_array, output_array, time_differences):
     norm = np.sum(np.absolute(input_array) / 2.0, dtype=np.float32)
 
     # FFTW.__Call__ automatically executes the FFT and returns the output array
-    #output_array = fft_object()
+    # output_array = fft_object()
     fft_object()
-
-    #print("Deleting input")
-    #del input_array
 
     # return the normalized Fourier power
     return np.square(np.absolute(output_array)) / norm
@@ -556,11 +503,7 @@ def FFTW_Transform(time_differences, window_size, max_freq):
     norm = np.sum(np.absolute(input_array) / 2.0, dtype=np.float32)
 
     # FFTW.__Call__ automatically executes the FFT and returns the output array
-    #output_array = fft_object()
     fft_object()
-
-    #print("Deleting input")
-    #del input_array
 
     # return the normalized Fourier power
     return np.square(np.absolute(output_array)) / norm
@@ -579,7 +522,6 @@ def ExtractBestCandidate(power_spectrum, min_freq, max_freq):
         max_freq: The largest frequency to search
 
     """
-    print(type(power_spectrum[0]))
 
     # This value is roughly correct, though FFT_resol := 1/window_size
     FFT_resol = float(max_freq) / (len(power_spectrum) - 1.0)
@@ -617,7 +559,6 @@ def FitExponentialTail(sorted_array):
     Parameters:
         sorted_array: A sorted power spectrum from pyfftw
     """
-    print('start_fit')
 
     # We define the tail through an emprical approximation
     if len(sorted_array) > 2000000:
@@ -637,16 +578,15 @@ def FitExponentialTail(sorted_array):
     std_Y = np.std(Y_values)
 
     # Find the slope
-    slope = correlation * (std_Y/std_X)
+    slope = correlation * (std_Y / std_X)
 
     intercept = np.mean(Y_values) - (slope * np.mean(X_values))
 
-    #print('calling call_Clinear')
-    #call_Clinear(Clinear, X_values)
-    #print('finished call_Clinear')
-
+    # The below two lines were in the original code:
     # this is a bit overkilling: a line is a polynomial of order 1
-    #return np.polyfit(X_values, Y_values, 1)
+    # return np.polyfit(X_values, Y_values, 1)
+
+    # We are  back to my code/method of doing this.
     return [slope, intercept]
 
 
