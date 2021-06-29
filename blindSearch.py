@@ -616,7 +616,28 @@ def PowerToPValue(power, slope, constant):
     return np.min([np.exp(constant + slope * effective_power), 1])
 
 
-def DisplayCandidate(candidate, best=False):
+def initOutfile(outFile):
+    """
+    Initalizes the output .csv file by writing column headers.
+
+    Parameters:
+        outFile: The name of the output file.
+    """
+
+    # The row that we want to write to the file
+    row = ['F0', 'F1', 'P-Value']
+
+    # Open the file for writing
+    with open(outFile, w) as f:
+
+        # Create the writer object
+        writer = csv.writer(f)
+
+        # Write the column headers to the file
+        writer.writerow(row)
+
+
+def DisplayCandidate(candidate, best=False, outFile=None):
     """
     Print the basic information about a pulsar candidate.
 
@@ -625,12 +646,20 @@ def DisplayCandidate(candidate, best=False):
 
     Keyword arguments:
         best: Prints some additional information about the candidate
+        outFile: Saves the output to a .csv file
     """
+
     if best:
         print("\nThe best pulsar candidate is:")
     # the second entry in the candidate is the value of p1/p0=-f1/f0
     Fdot = -1. * candidate[1] * candidate[0]
     print("F0=%.8f F1=%.3e P-Value=%.2e" % (candidate[0], Fdot, candidate[2]))
+
+    # If outFile has been provided, save a CSV
+    if outFile is not None:
+        with open(outfile, 'w') as f:
+
+
     if best:
         if candidate[1] == 0:
             print("Characteristic age and Edot not available (F1 null)")
