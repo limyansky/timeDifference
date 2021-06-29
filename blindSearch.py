@@ -138,23 +138,17 @@ def main():
     step = 0
     OverallBest = [0, 0, 1]
 
-    save_wisdom = False
-    load_wisdom = False
+    # If there is a wisdom file specified, but it doesn't exist, I need to
+    # create it. The easiest way to do this is to run a single core job first,
+    # save the wisdom file, then jump into the multiprocessing code.
+    if args.wisdom_file is not None and not os.path.isfile(args.wisdom_file):
+        run_scan(times, weights, args.window_size, args.min_freq,
+                 args.max_freq, epoch, p1_p0_list[0],
+                 save_wisdom=args.wisdom_file, out_file=args.out_file)
 
-    # Check for the existance of a wisdom file
-    if args.wisdom_file is not None and os.path.isfile(args.wisdom_file):
-        load_wisdom = True
-    elif args.wisdom_file is not None and not os.path.isfile(args.wisdom_file):
-        save_wisdom = True
+    # Break up the p1_p0 list into smaller lists, one for each processor.
 
-    # Load the pyfftw wisdom file
-    if load_wisdom:
-        LoadWisdom(args.wisdom_file)
-        load_wisdom = False
 
-    # Initalize the pyFFTW object
-    fftw_object, input_array, output_array = init_FFTW(args.window_size,
-                                                       args.max_freq)
 
     # Step through the list of p1_p0
     for p1_p0 in p1_p0_list:
