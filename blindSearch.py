@@ -186,7 +186,7 @@ def main():
                                                args.max_freq)
 
         # Print the candidate
-        DisplayCandidate([freq, p1_p0, p_value], outFile=args.out_file)
+        DisplayCandidate([freq, p1_p0, p_value], out_file=args.out_file)
 
         # If the candidate is the overall best, store it
         if p_value <= OverallBest[2]:
@@ -304,7 +304,7 @@ def call_CinPlace(function, photons, weights, windowSize=524288, maxFreq=64):
         weights: A list of photon weights corresponding to the times
 
     Keyword Arguments:
-        WindowSize: THe maximum time difference to include
+        WindowSize: The maximum time difference to include
         maxFreq: The maximum frequency to search
     """
 
@@ -645,7 +645,7 @@ def initOutFile(outFile):
         writer.writerow(row)
 
 
-def DisplayCandidate(candidate, best=False, outFile=None):
+def DisplayCandidate(candidate, best=False, out_file=None):
     """
     Print the basic information about a pulsar candidate.
 
@@ -664,9 +664,14 @@ def DisplayCandidate(candidate, best=False, outFile=None):
     print("F0=%.8f F1=%.3e P-Value=%.2e" % (candidate[0], Fdot, candidate[2]))
 
     # If outFile has been provided, save a CSV
-    if outFile is not None:
-        with open(outfile, 'w') as f:
+    if out_file is not None:
+        with open(out_file, 'w') as f:
 
+            # Create the writer object.
+            writer = csv.writer(f)
+
+            # Write the row
+            writer.writerow([candidate[0], Fdot, candidate[2]])
 
     if best:
         if candidate[1] == 0:
