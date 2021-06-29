@@ -665,7 +665,7 @@ def DisplayCandidate(candidate, best=False, out_file=None):
 
     # If outFile has been provided, save a CSV
     if out_file is not None:
-        with open(out_file, 'w') as f:
+        with open(out_file, 'a') as f:
 
             # Create the writer object.
             writer = csv.writer(f)
