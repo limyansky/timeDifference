@@ -636,7 +636,7 @@ def initOutFile(outFile):
     row = ['F0', 'F1', 'P-Value']
 
     # Open the file for writing
-    with open(outFile, w) as f:
+    with open(outFile, 'w') as f:
 
         # Create the writer object
         writer = csv.writer(f)
