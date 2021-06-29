@@ -18,8 +18,11 @@ import pyfftw
 # File io
 import os
 
-# Savig wisdom files
+# Saving wisdom files
 import pickle
+
+# Save the outputs as a csv file
+import csv
 
 # Useful for debugging
 # import timeit
@@ -108,8 +111,17 @@ def main():
                         default=None,
                         help='Where to save and load pyfftw\'s wisdom file')
 
+    parser.add_argument('--out_file',
+                        nargs='?',
+                        default=None,
+                        help='Write the output to this file')
+
     # Extract the arguments from the parser
     args = parser.parse_args()
+
+    # If an output file was specified, create it and add column headers
+    if args.out_file is not None:
+        initOutFile(args.out_file)
 
     # Read in the times and weights
     times, weights = readEvents(args.FT1_file, args.weight_column)
@@ -177,7 +189,7 @@ def main():
                                                args.max_freq)
 
         # Print the candidate
-        DisplayCandidate([freq, p1_p0, p_value])
+        DisplayCandidate([freq, p1_p0, p_value], out_file=args.out_file)
 
         # If the candidate is the overall best, store it
         if p_value <= OverallBest[2]:
@@ -324,8 +336,12 @@ def call_CtimeDiff(function, photons, weights, windowSize=524288, maxFreq=64):
                          len(cPhotons))
 
     # The C output needs to be converted back into something python can read.
+    # Not creating a deepcopy will cause a memory leak
     output = deepcopy(np.frombuffer(histogram.contents, dtype=np.double))
 
+    # C function, initalized at the start of this file, that calls "free" on
+    # the input. This fixes a memory leak where if histogram.contents is
+    # extracted, but never freed, it stays in memory.
     cleanup(histogram)
 
     return output
@@ -342,7 +358,7 @@ def call_CinPlace(function, photons, weights, windowSize=524288, maxFreq=64):
         weights: A list of photon weights corresponding to the times
 
     Keyword Arguments:
-        WindowSize: THe maximum time difference to include
+        WindowSize: The maximum time difference to include
         maxFreq: The maximum frequency to search
     """
 
@@ -662,7 +678,28 @@ def PowerToPValue(power, slope, constant):
     return np.min([np.exp(constant + slope * effective_power), 1])
 
 
-def DisplayCandidate(candidate, best=False):
+def initOutFile(outFile):
+    """
+    Initalizes the output .csv file by writing column headers.
+
+    Parameters:
+        outFile: The name of the output file.
+    """
+
+    # The row that we want to write to the file
+    row = ['F0', 'F1', 'P-Value']
+
+    # Open the file for writing
+    with open(outFile, 'w') as f:
+
+        # Create the writer object
+        writer = csv.writer(f)
+
+        # Write the column headers to the file
+        writer.writerow(row)
+
+
+def DisplayCandidate(candidate, best=False, out_file=None):
     """
     Print the basic information about a pulsar candidate.
 
@@ -671,12 +708,25 @@ def DisplayCandidate(candidate, best=False):
 
     Keyword arguments:
         best: Prints some additional information about the candidate
+        outFile: Saves the output to a .csv file
     """
+
     if best:
         print("\nThe best pulsar candidate is:")
     # the second entry in the candidate is the value of p1/p0=-f1/f0
     Fdot = -1. * candidate[1] * candidate[0]
     print("F0=%.8f F1=%.3e P-Value=%.2e" % (candidate[0], Fdot, candidate[2]))
+
+    # If outFile has been provided, save a CSV
+    if out_file is not None:
+        with open(out_file, 'a') as f:
+
+            # Create the writer object.
+            writer = csv.writer(f)
+
+            # Write the row
+            writer.writerow([candidate[0], Fdot, candidate[2]])
+
     if best:
         if candidate[1] == 0:
             print("Characteristic age and Edot not available (F1 null)")
