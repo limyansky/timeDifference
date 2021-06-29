@@ -10,7 +10,7 @@ import numpy as np
 from astropy.io import fits
 
 # Allows for importing C code
-from ctypes import CDLL, c_int, c_double, POINTER, c_float
+from ctypes import CDLL, c_int, c_double, POINTER, c_float, c_void_p
 
 # The fourier transform code
 import pyfftw
@@ -27,13 +27,19 @@ import tracemalloc
 
 import gc
 
+import resource
+
+from copy import deepcopy
+
 # Prepare the C code
 timeDifference = CDLL('/home/brent/github/timeDifference/timeDiff.so')
 CtimeDiff = timeDifference.timeDifference_fast
 CinPlace  = timeDifference.timeDifference_inPlace
 #Clinear = timeDifference.linearFit
 Csort = timeDifference.wrap_qsort
+cleanup = timeDifference.cleanup
 
+cleanup.argtypes = [c_void_p]
 
 # The function that will be run when the script is called
 def main():
@@ -111,8 +117,6 @@ def main():
     step = 0
     OverallBest = [0, 0, 1]
 
-    tracemalloc.start()
-
     save_wisdom = False
     load_wisdom = False
 
@@ -136,29 +140,32 @@ def main():
     # Step through the list of p1_p0
     for p1_p0 in p1_p0_list:
 
-        snap_start = tracemalloc.take_snapshot()
-
         print('step: ', step)
 
         # Update the step number
         step += 1
-
+        print("Starting. Memory usage: %s (kb)" % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
         # Correct the times
         new_times = TimeWarp(times, p1_p0, epoch)
 
-        print("Calculating time differences.")
-        # Find the time differences
-        # time_differences = call_CtimeDiff(CtimeDiff,
-        #                                   new_times,
-        #                                   weights,
-        #                                   windowSize=args.window_size,
-        #                                   maxFreq=args.max_freq)
+        print("After timeWarp. Memory usage: %s (kb)" % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 
-        time_differences = call_CinPlace(CinPlace,
-                                         new_times,
-                                         weights,
-                                         windowSize=args.window_size,
-                                         maxFreq=args.max_freq)
+        print("Calculating time differences.")
+
+        # Find the time differences
+        time_differences = call_CtimeDiff(CtimeDiff,
+                                          new_times,
+                                          weights,
+                                          windowSize=args.window_size,
+                                          maxFreq=args.max_freq)
+
+        print("After differences. Memory usage: %s (kb)" % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+
+        # time_differences = call_CinPlace(CinPlace,
+        #                                  new_times,
+        #                                  weights,
+        #                                  windowSize=args.window_size,
+        #                                  maxFreq=args.max_freq)
 
         # # Load the pyfftw wisdom file
         # if load_wisdom:
@@ -173,6 +180,7 @@ def main():
         power_spectrum = run_FFTW(fftw_object, input_array, output_array,
                                   time_differences)
 
+        print("After power_spectrum. Memory usage: %s (kb)" % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 
         if save_wisdom:
             SaveWisdom(args.wisdom_file)
@@ -183,6 +191,9 @@ def main():
         [freq, p_value] = ExtractBestCandidate(power_spectrum,
                                                args.min_freq,
                                                args.max_freq)
+
+        print("After extraction. Memory usage: %s (kb)" % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+
         # Print the candidate
         DisplayCandidate([freq, p1_p0, p_value])
 
@@ -190,14 +201,6 @@ def main():
         # If the candidate is the overall best, store it
         if p_value <= OverallBest[2]:
             OverallBest = [freq, p1_p0, p_value]
-
-        snap_end = tracemalloc.take_snapshot()
-
-        stats = snap_end.compare_to(snap_start, 'lineno')
-
-        for ii in stats[:5]:
-            print(ii)
-
 
     # Show a summary of the search
     print("\nScan in -f1/f0 completed after %d steps" % (len(p1_p0_list)))
@@ -290,9 +293,11 @@ def call_CtimeDiff(function, photons, weights, windowSize=524288, maxFreq=64):
                          len(cPhotons))
 
     # The C output needs to be converted back into something python can read.
-    histogram = np.frombuffer(histogram.contents)
+    output = deepcopy(np.frombuffer(histogram.contents, dtype=np.double))
 
-    return histogram
+    cleanup(histogram)
+
+    return output
 
 
 # A function to call the C code which performs the time differencing
@@ -327,7 +332,8 @@ def call_CinPlace(function, photons, weights, windowSize=524288, maxFreq=64):
              windowSize, maxFreq, len(cPhotons))
 
     # The C output needs to be converted back into something python can read.
-    histogram = np.frombuffer(cHistogram.contents)
+    #histogram = np.frombuffer(cHistogram.contents)
+    print(sum(histogram))
 
     return histogram
 

@@ -15,6 +15,7 @@
 double * timeDifference(double *, double*, int, int, int);
 double * timeDifference_fast(double *, double*, int, int, int);
 void timeDifference_inPlace(double *, double*, double*, int, int, int);
+void cleanup(void *);
 // double * timeDifference_multi(double *, double *, int, int, int, int, int);
 // double * timeDifference_multi(double *, double *, int, int, int, int, int);
 
@@ -23,6 +24,13 @@ int fftSize(int, int);
 void wrap_qsort(float *, int);
 int cmpfunc(const void *, const void *);
 
+
+// A function to release malloc'ed memory.
+void cleanup(void * object)
+{
+    free(object);
+    return;
+}
 
 // We need a function to pass to qsort. This is it.
 // I got this from stack exchange
