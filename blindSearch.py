@@ -116,6 +116,10 @@ def main():
     # Extract the arguments from the parser
     args = parser.parse_args()
 
+    # If an output file was specified, create it and add column headers
+    if args.out_file is not None:
+        initOutFile(args.out_file)
+
     # Read in the times and weights
     times, weights = readEvents(args.FT1_file, args.weight_column)
 
@@ -182,7 +186,7 @@ def main():
                                                args.max_freq)
 
         # Print the candidate
-        DisplayCandidate([freq, p1_p0, p_value])
+        DisplayCandidate([freq, p1_p0, p_value], outFile=args.out_file)
 
         # If the candidate is the overall best, store it
         if p_value <= OverallBest[2]:
@@ -278,8 +282,12 @@ def call_CtimeDiff(function, photons, weights, windowSize=524288, maxFreq=64):
                          len(cPhotons))
 
     # The C output needs to be converted back into something python can read.
+    # Not creating a deepcopy will cause a memory leak
     output = deepcopy(np.frombuffer(histogram.contents, dtype=np.double))
 
+    # C function, initalized at the start of this file, that calls "free" on
+    # the input. This fixes a memory leak where if histogram.contents is
+    # extracted, but never freed, it stays in memory.
     cleanup(histogram)
 
     return output
@@ -616,7 +624,7 @@ def PowerToPValue(power, slope, constant):
     return np.min([np.exp(constant + slope * effective_power), 1])
 
 
-def initOutfile(outFile):
+def initOutFile(outFile):
     """
     Initalizes the output .csv file by writing column headers.
 
