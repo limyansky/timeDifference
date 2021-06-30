@@ -24,6 +24,8 @@ import pickle
 # Save the outputs as a csv file
 import csv
 
+from math import floor
+
 # Useful for debugging
 # import timeit
 # import resource
@@ -116,6 +118,12 @@ def main():
                         default=None,
                         help='Write the output to this file')
 
+    parser.add_argument('--n_cores',
+                        default=1,
+                        type=int,
+                        help='The number of processors to use')
+
+
     # Extract the arguments from the parser
     args = parser.parse_args()
 
@@ -141,17 +149,65 @@ def main():
     # If there is a wisdom file specified, but it doesn't exist, I need to
     # create it. The easiest way to do this is to run a single core job first,
     # save the wisdom file, then jump into the multiprocessing code.
+
+    # Assume, at first, that we didn't initalize the wisdom file using the
+    # first step
+    initalized = False
+
     if args.wisdom_file is not None and not os.path.isfile(args.wisdom_file):
+
+        # Keep track of if we ran this over the first bin or not
+        initalized = True
+
+        # Run a single iteration of the scan, saving the wisdom file
         run_scan(times, weights, args.window_size, args.min_freq,
                  args.max_freq, epoch, p1_p0_list[0],
                  save_wisdom=args.wisdom_file, out_file=args.out_file)
 
     # Break up the p1_p0 list into smaller lists, one for each processor.
 
+    # Initalize the list of lists
+    p1_p0_master = []
 
+    # Calculate the break points to split the process between cores
+    unit_length = floor((len(p1_p0_list) - 1) / args.n_cores)
+
+    # A place to keep track of where we want to slice the p1_p0 list
+    break_points = []
+
+    # Check if we need to skip the first bin or not
+    if initalized:
+
+        # Start by skipping the first bin
+        break_points.append(1)
+
+    # If we don't need to skip the first bin, then don't skip it...
+    elif not initalized:
+        # Don't skip the first bin
+        break_points.append(0)
+
+    # Fill in subsequent break points
+    for ii in range(args.n_cores - 1):
+
+        # We already added the starting index, 1, so we jump ahead
+        ii = ii + 1
+
+        # Python uses exclusive upper limits, so we need to add 1
+        break_points.append(ii * unit_length + 1)
+
+    # make sure it ends at the last bin
+    break_points.append(len(p1_p0_list))
+
+    # Now that we have the break points, we run through them to fill in the
+    # list of lists we will be iterating through. 
+    for ii in range(len(break_points) - 1):
+        p1_p0_master.append(p1_p0_list[break_points[ii]:break_points[ii + 1]])
+
+    print(p1_p0_master)
+    print(len(p1_p0_master[0]))
 
     # Step through the list of p1_p0
-    for p1_p0 in p1_p0_list:
+    for p1_p0 in p1_p0_master:
 
         print('step: ', step)
 
