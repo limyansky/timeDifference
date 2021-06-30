@@ -143,7 +143,6 @@ def main():
 
     # Begin the search process
     # Keep track of how many steps we have done
-    step = 0
     OverallBest = [0, 0, 1]
 
     # If there is a wisdom file specified, but it doesn't exist, I need to
@@ -161,8 +160,8 @@ def main():
 
         # Run a single iteration of the scan, saving the wisdom file
         run_scan(times, weights, args.window_size, args.min_freq,
-                 args.max_freq, epoch, p1_p0_list[0],
-                 save_wisdom=args.wisdom_file, out_file=args.out_file)
+                 args.max_freq, epoch, p1_p0_list[0], None, args.out_file
+                 save_wisdom=args.wisdom_file)
 
     # Break up the p1_p0 list into smaller lists, one for each processor.
 
@@ -183,6 +182,7 @@ def main():
 
     # If we don't need to skip the first bin, then don't skip it...
     elif not initalized:
+
         # Don't skip the first bin
         break_points.append(0)
 
@@ -198,66 +198,35 @@ def main():
     # make sure it ends at the last bin
     break_points.append(len(p1_p0_list))
 
+    # Create a template that will be passed to starmap
+    template_input = [times, weights, args.window_size, args.min_freq,
+                      args.max_freq, 0, args.wisdom_file, args.out_file]
+
     # Now that we have the break points, we run through them to fill in the
-    # list of lists we will be iterating through. 
+    # list of lists we will be iterating through.
     for ii in range(len(break_points) - 1):
-        p1_p0_master.append(p1_p0_list[break_points[ii]:break_points[ii + 1]])
 
-    print(p1_p0_master)
-    print(len(p1_p0_master[0]))
+        # Fill in the appropriate spot in the template
+        template_input[5] = p1_p0_list[break_points[ii]:break_points[ii + 1]]
+        p1_p0_master.append(template_input)
 
-    # Step through the list of p1_p0
-    for p1_p0 in p1_p0_master:
-
-        print('step: ', step)
-
-        # Update the step number
-        step += 1
-
-        # Correct the times
-        new_times = TimeWarp(times, p1_p0, epoch)
-
-        # Find the time differences
-        time_differences = call_CtimeDiff(CtimeDiff,
-                                          new_times,
-                                          weights,
-                                          windowSize=args.window_size,
-                                          maxFreq=args.max_freq)
-
-        # run the FFTW
-        power_spectrum = run_FFTW(fftw_object, input_array, output_array,
-                                  time_differences)
-
-        # If needed, save the wisdom file
-        if save_wisdom:
-            SaveWisdom(args.wisdom_file)
-            save_wisdom = False
-
-        # Extract the best candidate
-        [freq, p_value] = ExtractBestCandidate(power_spectrum,
-                                               args.min_freq,
-                                               args.max_freq)
-
-        # Print the candidate
-        DisplayCandidate([freq, p1_p0, p_value], out_file=args.out_file)
-
-        # If the candidate is the overall best, store it
-        if p_value <= OverallBest[2]:
-            OverallBest = [freq, p1_p0, p_value]
+    # Run through the lists in a multiprocessing way
+    with multiprocessing.Pool(processes=args.n_cores) as pool:
+        pool.starmap(run_scan, p1_p0_master)
 
     # Show a summary of the search
     print("\nScan in -f1/f0 completed after %d steps" % (len(p1_p0_list)))
-    DisplayCandidate(OverallBest, best=True)
 
     return 0
 
 
 # Runs through a list of p1_p0 values
+# load_wisdom is not initalized to None because multiprocessing starmap cannot
+# easily pass in keyword arguments. The same is true of out_file.
 def run_scan(times, weights,
              window_size, min_freq, max_freq, epoch,
-             p1_p0_list,
-             save_wisdom=None, load_wisdom=None,
-             out_file=None):
+             p1_p0_list, load_wisdom, out_file,
+             save_wisdom=None):
     """
     Runs a single search step in P1_P0
 
