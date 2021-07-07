@@ -123,7 +123,6 @@ def main():
                         type=int,
                         help='The number of processors to use')
 
-
     # Extract the arguments from the parser
     args = parser.parse_args()
 
@@ -131,7 +130,9 @@ def main():
     if args.out_file is not None:
         initOutFile(args.out_file)
 
-    # Read in the times and weights
+    # global times
+    # global weights
+
     times, weights = readEvents(args.FT1_file, args.weight_column)
 
     # Calculate the epoch as the center of the times
@@ -140,6 +141,7 @@ def main():
     # Setup a basic search grid in -f1/f0
     p1_p0_step = GetP1_P0Step(times, args.window_size, args.max_freq)
     p1_p0_list = GetP1_P0List(p1_p0_step, args.lower_p1_p0, args.upper_p1_p0)
+    p1_p0_list = p1_p0_list[0:5]
 
     # Begin the search process
     # Keep track of how many steps we have done
@@ -160,7 +162,7 @@ def main():
 
         # Run a single iteration of the scan, saving the wisdom file
         run_scan(times, weights, args.window_size, args.min_freq,
-                 args.max_freq, epoch, p1_p0_list[0], None, args.out_file
+                 args.max_freq, epoch, p1_p0_list[0], None, args.out_file,
                  save_wisdom=args.wisdom_file)
 
     # Break up the p1_p0 list into smaller lists, one for each processor.
@@ -200,19 +202,33 @@ def main():
 
     # Create a template that will be passed to starmap
     template_input = [times, weights, args.window_size, args.min_freq,
-                      args.max_freq, 0, args.wisdom_file, args.out_file]
+                      args.max_freq, epoch, 0, args.wisdom_file, args.out_file]
+
+    # template_input = [args.window_size, args.min_freq,
+    #               args.max_freq, epoch, 0, args.wisdom_file, args.out_file]
+
 
     # Now that we have the break points, we run through them to fill in the
     # list of lists we will be iterating through.
     for ii in range(len(break_points) - 1):
 
         # Fill in the appropriate spot in the template
-        template_input[5] = p1_p0_list[break_points[ii]:break_points[ii + 1]]
+        template_input[6] = p1_p0_list[break_points[ii]:break_points[ii + 1]]
+        # template_input[4] = p1_p0_list[break_points[ii]:break_points[ii + 1]]
+        print(template_input[6])
+
         p1_p0_master.append(template_input)
 
+    # run_scan(args.window_size, args.min_freq,
+    #      args.max_freq, epoch, p1_p0_list, args.wisdom_file, args.out_file)
+
+
     # Run through the lists in a multiprocessing way
-    with multiprocessing.Pool(processes=args.n_cores) as pool:
-        pool.starmap(run_scan, p1_p0_master)
+    pool = multiprocessing.Pool(processes=args.n_cores)
+
+    pool.starmap(run_scan, p1_p0_master)
+
+    pool.close()
 
     # Show a summary of the search
     print("\nScan in -f1/f0 completed after %d steps" % (len(p1_p0_list)))
@@ -252,7 +268,13 @@ def run_scan(times, weights,
     # Initalize pyfftw
     fftw_object, fft_input, fft_output = init_FFTW(window_size, max_freq)
 
+    step = 0
+
     for p1_p0 in p1_p0_list:
+
+        step += 1
+        print('Step: ', step)
+
         # Correct the times
         new_times = TimeWarp(times, p1_p0, epoch)
 
@@ -281,7 +303,7 @@ def run_scan(times, weights,
                                                min_freq, max_freq)
 
         # Print the candidate
-        DisplayCandidate([freq, p1_p0, p_value], out_file)
+        DisplayCandidate([freq, p1_p0, p_value], out_file=out_file)
 
 
 # Calculates the size of the FFT
@@ -497,6 +519,7 @@ def TimeWarp(times, p1_p0, epoch):
 
     # the minus sign enters because p1_p0 is p1/p0=-f1/f0
     times = times - 0.5 * p1_p0 * (times - epoch)**2
+
     return times
 
 
@@ -741,6 +764,7 @@ def DisplayCandidate(candidate, best=False, out_file=None):
         best: Prints some additional information about the candidate
         outFile: Saves the output to a .csv file
     """
+    print("out_file is: ", out_file)
 
     if best:
         print("\nThe best pulsar candidate is:")
@@ -751,6 +775,8 @@ def DisplayCandidate(candidate, best=False, out_file=None):
     # If outFile has been provided, save a CSV
     if out_file is not None:
         with open(out_file, 'a') as f:
+
+            print('Writing to file.')
 
             # Create the writer object.
             writer = csv.writer(f)
@@ -769,4 +795,8 @@ def DisplayCandidate(candidate, best=False, out_file=None):
 
 # If called from the commandline, run this script.
 if __name__ == '__main__':
+
+    # Just try deleting the below line. I dare you.
+    multiprocessing.set_start_method("spawn")
+
     main()
