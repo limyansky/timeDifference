@@ -134,9 +134,7 @@ def main():
     # two processes writing to it at the same time.
     lock = multiprocessing.Lock()
 
-    # global times
-    # global weights
-
+    # Load the photon times and weights from the input files
     times, weights = readEvents(args.FT1_file, args.weight_column)
 
     # Calculate the epoch as the center of the times
@@ -145,7 +143,6 @@ def main():
     # Setup a basic search grid in -f1/f0
     p1_p0_step = GetP1_P0Step(times, args.window_size, args.max_freq)
     p1_p0_list = GetP1_P0List(p1_p0_step, args.lower_p1_p0, args.upper_p1_p0)
-    p1_p0_list = p1_p0_list[0:5]
 
     # Begin the search process
     # Keep track of how many steps we have done
@@ -169,20 +166,22 @@ def main():
                  args.max_freq, epoch, p1_p0_list[0], None,
                  args.out_file, save_wisdom=args.wisdom_file)
 
-
-
     # Break up the p1_p0 list into smaller lists, one for each processor.
 
     # Initalize the list of lists
     p1_p0_master = []
 
-    # Calculate the break points to split the process between cores
+    # Calculate the break points to split the process between cores.
+    # This value is roughly (e.g. if you have an odd number of p1/p0, but an
+    # even number of cores) the number of jobs per core.
     unit_length = floor((len(p1_p0_list) - 1) / args.n_cores)
 
     # A place to keep track of where we want to slice the p1_p0 list
     break_points = []
 
     # Check if we need to skip the first bin or not
+    # We may have already calculated this and used it to generate the wisdom
+    # files.
     if initalized:
 
         # Start by skipping the first bin
@@ -206,13 +205,12 @@ def main():
     # make sure it ends at the last bin
     break_points.append(len(p1_p0_list))
 
-    # Create a template that will be passed to starmap
+    # Create a template that will be passed to starmap.
+    # This holds all the arguments that run_scan needs, other than the
+    # p1/p0 values we wish for that particular core to scan over. A placeholder
+    # "0" is used for those, and will be filled in in the following loop.
     template_input = [times, weights, args.window_size, args.min_freq,
                       args.max_freq, epoch, 0, args.wisdom_file, args.out_file]
-
-    # template_input = [args.window_size, args.min_freq,
-    #               args.max_freq, epoch, 0, args.wisdom_file, args.out_file]
-
 
     # Now that we have the break points, we run through them to fill in the
     # list of lists we will be iterating through.
@@ -220,20 +218,26 @@ def main():
 
         # Fill in the appropriate spot in the template
         template_input[6] = p1_p0_list[break_points[ii]:break_points[ii + 1]]
-        # template_input[4] = p1_p0_list[break_points[ii]:break_points[ii + 1]]
-        print(template_input[6])
 
+        # This is good to double check that jobs are being partitioned
+        # correctly.
+        # print(template_input[6])
+
+        # If we don't append a deepcopy, all cores will recieve a copy of only
+        # the last p1_p0_list slice and thus all to the same job.
         p1_p0_master.append(deepcopy(template_input))
 
-    # run_scan(args.window_size, args.min_freq,
-    #      args.max_freq, epoch, p1_p0_list, args.wisdom_file, args.out_file)
-
-    # Run through the lists in a multiprocessing way
+    # Run through the lists in a multiprocessing way.
+    # Locks can't be passed to multiprocessing as arguments (because they are
+    # non-pickelable), so I have to use the initalizer and initargs keyword
+    # arguments to ensure that each process has access to the lock.
     pool = multiprocessing.Pool(initializer=init_lock, initargs=(lock,),
                                 processes=args.n_cores)
 
+    # Actually runs the multiprocessing
     pool.starmap(run_scan, p1_p0_master)
 
+    # closes the pool when we are done
     pool.close()
 
     # Show a summary of the search
@@ -246,8 +250,7 @@ def main():
 # load_wisdom is not initalized to None because multiprocessing starmap cannot
 # easily pass in keyword arguments. The same is true of out_file.
 def run_scan(times, weights,
-             window_size, min_freq, max_freq, epoch,
-             p1_p0_list, load_wisdom, out_file,
+             window_size, min_freq, max_freq, epoch, p1_p0_list, load_wisdom, out_file,
              save_wisdom=None):
     """
     Runs a single search step in P1_P0
@@ -279,9 +282,8 @@ def run_scan(times, weights,
     for p1_p0 in p1_p0_list:
 
         step += 1
-
-        print(multiprocessing.current_process(), 'Step: ', step)
-        print(multiprocessing.current_process(), 'p1_p0: ', p1_p0)
+        print(multiprocessing.current_process(),
+              'Step: ', step, '/', len(p1_p0_list))
 
         # Correct the times
         new_times = TimeWarp(times, p1_p0, epoch)
@@ -297,10 +299,6 @@ def run_scan(times, weights,
         power_spectrum = run_FFTW(fftw_object, fft_input, fft_output,
                                   time_differences)
 
-        print()
-        print(multiprocessing.current_process(), 'power_spectrum: ', power_spectrum[100])
-        print()
-
         # If needed, save the wisdom file
         if save_wisdom is not None:
 
@@ -313,20 +311,20 @@ def run_scan(times, weights,
         # Extract the best candidate
         [freq, p_value] = ExtractBestCandidate(power_spectrum,
                                                min_freq, max_freq)
-        print(multiprocessing.current_process(), 'freq: ', freq)
 
         # Acquire the lock
         lock.acquire()
-        print(multiprocessing.current_process(), 'Lock acquired.')
 
         # Print the candidate
         DisplayCandidate([freq, p1_p0, p_value], out_file=out_file)
-        print(multiprocessing.current_process(), 'Candidate displayed.')
 
         # Release the lock
         lock.release()
 
 
+# This us used in initalization of multiprocessing so that each child
+# process has access to the file lock preventing them from simultaneosuly
+# appending to the csv output file.
 def init_lock(lock_handle):
     global lock
     lock = lock_handle
@@ -795,28 +793,19 @@ def DisplayCandidate(candidate, best=False, out_file=None):
         print("\nThe best pulsar candidate is:")
     # the second entry in the candidate is the value of p1/p0=-f1/f0
     Fdot = -1. * candidate[1] * candidate[0]
-    # print("F0=%.8f F1=%.3e P-Value=%.2e" % (candidate[0], Fdot, candidate[2]))
+    # print("F0=%.8f F1=%.3e P-Value=%.2e" % (candidate[0], Fdot,
+    #       candidate[2]))
 
     # If outFile has been provided, save a CSV
     if out_file is not None:
 
-        print('opening file to write.')
-
         with open(out_file, 'a') as f:
-
-            print('Writing to file.')
 
             # Create the writer object.
             writer = csv.writer(f)
 
-            print('writer object created.')
-
             # Write the row
             writer.writerow([candidate[0], Fdot, candidate[2]])
-
-            print('row written.')
-
-    print('out of if statement')
 
     if best:
         if candidate[1] == 0:
