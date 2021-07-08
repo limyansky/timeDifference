@@ -130,6 +130,10 @@ def main():
     if args.out_file is not None:
         initOutFile(args.out_file)
 
+    # I need to "lock" the output file within each process, as I can't have
+    # two processes writing to it at the same time.
+    lock = multiprocessing.Lock()
+
     # global times
     # global weights
 
@@ -162,8 +166,10 @@ def main():
 
         # Run a single iteration of the scan, saving the wisdom file
         run_scan(times, weights, args.window_size, args.min_freq,
-                 args.max_freq, epoch, p1_p0_list[0], None, args.out_file,
-                 save_wisdom=args.wisdom_file)
+                 args.max_freq, epoch, p1_p0_list[0], None,
+                 args.out_file, save_wisdom=args.wisdom_file)
+
+
 
     # Break up the p1_p0 list into smaller lists, one for each processor.
 
@@ -217,14 +223,14 @@ def main():
         # template_input[4] = p1_p0_list[break_points[ii]:break_points[ii + 1]]
         print(template_input[6])
 
-        p1_p0_master.append(template_input)
+        p1_p0_master.append(deepcopy(template_input))
 
     # run_scan(args.window_size, args.min_freq,
     #      args.max_freq, epoch, p1_p0_list, args.wisdom_file, args.out_file)
 
-
     # Run through the lists in a multiprocessing way
-    pool = multiprocessing.Pool(processes=args.n_cores)
+    pool = multiprocessing.Pool(initializer=init_lock, initargs=(lock,),
+                                processes=args.n_cores)
 
     pool.starmap(run_scan, p1_p0_master)
 
@@ -273,7 +279,9 @@ def run_scan(times, weights,
     for p1_p0 in p1_p0_list:
 
         step += 1
-        print('Step: ', step)
+
+        print(multiprocessing.current_process(), 'Step: ', step)
+        print(multiprocessing.current_process(), 'p1_p0: ', p1_p0)
 
         # Correct the times
         new_times = TimeWarp(times, p1_p0, epoch)
@@ -289,6 +297,10 @@ def run_scan(times, weights,
         power_spectrum = run_FFTW(fftw_object, fft_input, fft_output,
                                   time_differences)
 
+        print()
+        print(multiprocessing.current_process(), 'power_spectrum: ', power_spectrum[100])
+        print()
+
         # If needed, save the wisdom file
         if save_wisdom is not None:
 
@@ -301,9 +313,23 @@ def run_scan(times, weights,
         # Extract the best candidate
         [freq, p_value] = ExtractBestCandidate(power_spectrum,
                                                min_freq, max_freq)
+        print(multiprocessing.current_process(), 'freq: ', freq)
+
+        # Acquire the lock
+        lock.acquire()
+        print(multiprocessing.current_process(), 'Lock acquired.')
 
         # Print the candidate
         DisplayCandidate([freq, p1_p0, p_value], out_file=out_file)
+        print(multiprocessing.current_process(), 'Candidate displayed.')
+
+        # Release the lock
+        lock.release()
+
+
+def init_lock(lock_handle):
+    global lock
+    lock = lock_handle
 
 
 # Calculates the size of the FFT
@@ -764,16 +790,18 @@ def DisplayCandidate(candidate, best=False, out_file=None):
         best: Prints some additional information about the candidate
         outFile: Saves the output to a .csv file
     """
-    print("out_file is: ", out_file)
 
     if best:
         print("\nThe best pulsar candidate is:")
     # the second entry in the candidate is the value of p1/p0=-f1/f0
     Fdot = -1. * candidate[1] * candidate[0]
-    print("F0=%.8f F1=%.3e P-Value=%.2e" % (candidate[0], Fdot, candidate[2]))
+    # print("F0=%.8f F1=%.3e P-Value=%.2e" % (candidate[0], Fdot, candidate[2]))
 
     # If outFile has been provided, save a CSV
     if out_file is not None:
+
+        print('opening file to write.')
+
         with open(out_file, 'a') as f:
 
             print('Writing to file.')
@@ -781,8 +809,14 @@ def DisplayCandidate(candidate, best=False, out_file=None):
             # Create the writer object.
             writer = csv.writer(f)
 
+            print('writer object created.')
+
             # Write the row
             writer.writerow([candidate[0], Fdot, candidate[2]])
+
+            print('row written.')
+
+    print('out of if statement')
 
     if best:
         if candidate[1] == 0:
