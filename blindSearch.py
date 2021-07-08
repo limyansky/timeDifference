@@ -24,6 +24,8 @@ import pickle
 # Save the outputs as a csv file
 import csv
 
+from math import floor
+
 # Useful for debugging
 # import timeit
 # import resource
@@ -31,8 +33,11 @@ import csv
 # kb.
 # print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 
-
+# Allows me to delete C object to free up memory
 from copy import deepcopy
+
+# Run the code on multiple cores
+import multiprocessing
 
 # Load the C library
 timeDifference = CDLL('/home/brent/github/timeDifference/timeDiff.so')
@@ -113,6 +118,11 @@ def main():
                         default=None,
                         help='Write the output to this file')
 
+    parser.add_argument('--n_cores',
+                        default=1,
+                        type=int,
+                        help='The number of processors to use')
+
     # Extract the arguments from the parser
     args = parser.parse_args()
 
@@ -120,7 +130,11 @@ def main():
     if args.out_file is not None:
         initOutFile(args.out_file)
 
-    # Read in the times and weights
+    # I need to "lock" the output file within each process, as I can't have
+    # two processes writing to it at the same time.
+    lock = multiprocessing.Lock()
+
+    # Load the photon times and weights from the input files
     times, weights = readEvents(args.FT1_file, args.weight_column)
 
     # Calculate the epoch as the center of the times
@@ -131,35 +145,145 @@ def main():
     p1_p0_list = GetP1_P0List(p1_p0_step, args.lower_p1_p0, args.upper_p1_p0)
 
     # Begin the search process
-    # Keep track of how many steps we have done
+    # OverallBest = [0, 0, 1]
+
+    # If there is a wisdom file specified, but it doesn't exist, I need to
+    # create it. The easiest way to do this is to run a single core job first,
+    # save the wisdom file, then jump into the multiprocessing code.
+
+    # Assume, at first, that we didn't initalize the wisdom file using the
+    # first step
+    initalized = False
+
+    if args.wisdom_file is not None and not os.path.isfile(args.wisdom_file):
+
+        # Keep track of if we ran this over the first bin or not
+        initalized = True
+
+        # Run a single iteration of the scan, saving the wisdom file
+        run_scan(times, weights, args.window_size, args.min_freq,
+                 args.max_freq, epoch, p1_p0_list[0], None,
+                 args.out_file, save_wisdom=args.wisdom_file)
+
+    # Break up the p1_p0 list into smaller lists, one for each processor.
+
+    # Initalize the list of lists
+    p1_p0_master = []
+
+    # Calculate the break points to split the process between cores.
+    # This value is roughly (e.g. if you have an odd number of p1/p0, but an
+    # even number of cores) the number of jobs per core.
+    unit_length = floor((len(p1_p0_list) - 1) / args.n_cores)
+
+    # A place to keep track of where we want to slice the p1_p0 list
+    break_points = []
+
+    # Check if we need to skip the first bin or not
+    # We may have already calculated this and used it to generate the wisdom
+    # files.
+    if initalized:
+
+        # Start by skipping the first bin
+        break_points.append(1)
+
+    # If we don't need to skip the first bin, then don't skip it...
+    elif not initalized:
+
+        # Don't skip the first bin
+        break_points.append(0)
+
+    # Fill in subsequent break points
+    for ii in range(args.n_cores - 1):
+
+        # We already added the starting index, 1, so we jump ahead
+        ii = ii + 1
+
+        # Python uses exclusive upper limits, so we need to add 1
+        break_points.append(ii * unit_length + 1)
+
+    # make sure it ends at the last bin
+    break_points.append(len(p1_p0_list))
+
+    # Create a template that will be passed to starmap.
+    # This holds all the arguments that run_scan needs, other than the
+    # p1/p0 values we wish for that particular core to scan over. A placeholder
+    # "0" is used for those, and will be filled in in the following loop.
+    template_input = [times, weights, args.window_size, args.min_freq,
+                      args.max_freq, epoch, 0, args.wisdom_file, args.out_file]
+
+    # Now that we have the break points, we run through them to fill in the
+    # list of lists we will be iterating through.
+    for ii in range(len(break_points) - 1):
+
+        # Fill in the appropriate spot in the template
+        template_input[6] = p1_p0_list[break_points[ii]:break_points[ii + 1]]
+
+        # This is good to double check that jobs are being partitioned
+        # correctly.
+        # print(template_input[6])
+
+        # If we don't append a deepcopy, all cores will recieve a copy of only
+        # the last p1_p0_list slice and thus all to the same job.
+        p1_p0_master.append(deepcopy(template_input))
+
+    # Run through the lists in a multiprocessing way.
+    # Locks can't be passed to multiprocessing as arguments (because they are
+    # non-pickelable), so I have to use the initalizer and initargs keyword
+    # arguments to ensure that each process has access to the lock.
+    pool = multiprocessing.Pool(initializer=init_lock, initargs=(lock,),
+                                processes=args.n_cores)
+
+    # Actually runs the multiprocessing
+    pool.starmap(run_scan, p1_p0_master)
+
+    # closes the pool when we are done
+    pool.close()
+
+    # Show a summary of the search
+    print("\nScan in -f1/f0 completed after %d steps" % (len(p1_p0_list)))
+
+    return 0
+
+
+# Runs through a list of p1_p0 values
+# load_wisdom is not initalized to None because multiprocessing starmap cannot
+# easily pass in keyword arguments. The same is true of out_file.
+def run_scan(times, weights,
+             window_size, min_freq, max_freq, epoch, p1_p0_list, load_wisdom,
+             out_file,
+             save_wisdom=None):
+    """
+    Runs a single search step in P1_P0
+
+    Parameters:
+        times: A list of photon times
+        weights: A list of photon weights
+        window_size: The maximum time difference, in seconds
+        max_freq: The maximum frequency to search
+        epoch: The epoch from which to correct photon times
+        p1_p0_lsit: A list of P1/P0 steps over which to search
+
+    Keyword Arguments:
+        save_wisdom: A place to save the fft wisdom file
+        load_wisdom: The location of a saved fft wisdom file
+        out_file: A place to save outputs in .csv format
+
+    """
+
+    # Load the wisdom file, if requested
+    if load_wisdom is not None:
+        LoadWisdom(load_wisdom)
+
+    # Initalize pyfftw
+    fftw_object, fft_input, fft_output = init_FFTW(window_size, max_freq)
+
     step = 0
-    OverallBest = [0, 0, 1]
 
-    save_wisdom = False
-    load_wisdom = False
-
-    # Check for the existance of a wisdom file
-    if args.wisdom_file is not None and os.path.isfile(args.wisdom_file):
-        load_wisdom = True
-    elif args.wisdom_file is not None and not os.path.isfile(args.wisdom_file):
-        save_wisdom = True
-
-    # Load the pyfftw wisdom file
-    if load_wisdom:
-        LoadWisdom(args.wisdom_file)
-        load_wisdom = False
-
-    # Initalize the pyFFTW object
-    fftw_object, input_array, output_array = init_FFTW(args.window_size,
-                                                       args.max_freq)
-
-    # Step through the list of p1_p0
     for p1_p0 in p1_p0_list:
 
-        print('step: ', step)
-
-        # Update the step number
         step += 1
+        print(multiprocessing.current_process(),
+              'Step: ', step, '/', len(p1_p0_list))
 
         # Correct the times
         new_times = TimeWarp(times, p1_p0, epoch)
@@ -168,35 +292,42 @@ def main():
         time_differences = call_CtimeDiff(CtimeDiff,
                                           new_times,
                                           weights,
-                                          windowSize=args.window_size,
-                                          maxFreq=args.max_freq)
+                                          windowSize=window_size,
+                                          maxFreq=max_freq)
 
         # run the FFTW
-        power_spectrum = run_FFTW(fftw_object, input_array, output_array,
+        power_spectrum = run_FFTW(fftw_object, fft_input, fft_output,
                                   time_differences)
 
         # If needed, save the wisdom file
-        if save_wisdom:
-            SaveWisdom(args.wisdom_file)
-            save_wisdom = False
+        if save_wisdom is not None:
+
+            # Save the wisdom file
+            SaveWisdom(save_wisdom)
+
+            # Make sure we don't continue to save the wisdom file
+            save_wisdom = None
 
         # Extract the best candidate
         [freq, p_value] = ExtractBestCandidate(power_spectrum,
-                                               args.min_freq,
-                                               args.max_freq)
+                                               min_freq, max_freq)
+
+        # Acquire the lock
+        lock.acquire()
 
         # Print the candidate
-        DisplayCandidate([freq, p1_p0, p_value], out_file=args.out_file)
+        DisplayCandidate([freq, p1_p0, p_value], out_file=out_file)
 
-        # If the candidate is the overall best, store it
-        if p_value <= OverallBest[2]:
-            OverallBest = [freq, p1_p0, p_value]
+        # Release the lock
+        lock.release()
 
-    # Show a summary of the search
-    print("\nScan in -f1/f0 completed after %d steps" % (len(p1_p0_list)))
-    DisplayCandidate(OverallBest, best=True)
 
-    return 0
+# This us used in initalization of multiprocessing so that each child
+# process has access to the file lock preventing them from simultaneosuly
+# appending to the csv output file.
+def init_lock(lock_handle):
+    global lock
+    lock = lock_handle
 
 
 # Calculates the size of the FFT
@@ -412,6 +543,7 @@ def TimeWarp(times, p1_p0, epoch):
 
     # the minus sign enters because p1_p0 is p1/p0=-f1/f0
     times = times - 0.5 * p1_p0 * (times - epoch)**2
+
     return times
 
 
@@ -661,10 +793,12 @@ def DisplayCandidate(candidate, best=False, out_file=None):
         print("\nThe best pulsar candidate is:")
     # the second entry in the candidate is the value of p1/p0=-f1/f0
     Fdot = -1. * candidate[1] * candidate[0]
-    print("F0=%.8f F1=%.3e P-Value=%.2e" % (candidate[0], Fdot, candidate[2]))
+    # print("F0=%.8f F1=%.3e P-Value=%.2e" % (candidate[0], Fdot,
+    #       candidate[2]))
 
     # If outFile has been provided, save a CSV
     if out_file is not None:
+
         with open(out_file, 'a') as f:
 
             # Create the writer object.
@@ -684,4 +818,8 @@ def DisplayCandidate(candidate, best=False, out_file=None):
 
 # If called from the commandline, run this script.
 if __name__ == '__main__':
+
+    # Just try deleting the below line. I dare you.
+    multiprocessing.set_start_method("spawn")
+
     main()
