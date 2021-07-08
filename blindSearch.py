@@ -145,8 +145,7 @@ def main():
     p1_p0_list = GetP1_P0List(p1_p0_step, args.lower_p1_p0, args.upper_p1_p0)
 
     # Begin the search process
-    # Keep track of how many steps we have done
-    OverallBest = [0, 0, 1]
+    # OverallBest = [0, 0, 1]
 
     # If there is a wisdom file specified, but it doesn't exist, I need to
     # create it. The easiest way to do this is to run a single core job first,
@@ -250,7 +249,8 @@ def main():
 # load_wisdom is not initalized to None because multiprocessing starmap cannot
 # easily pass in keyword arguments. The same is true of out_file.
 def run_scan(times, weights,
-             window_size, min_freq, max_freq, epoch, p1_p0_list, load_wisdom, out_file,
+             window_size, min_freq, max_freq, epoch, p1_p0_list, load_wisdom,
+             out_file,
              save_wisdom=None):
     """
     Runs a single search step in P1_P0
