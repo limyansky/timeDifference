@@ -478,6 +478,47 @@ def call_Csort(function, toSort):
     toSort = function(CtoSort, len(toSort))
 
 
+# Get the step in F1/F0
+def GetF1_F0Step(times, windowSize=524288, maxFreq=64):
+    """
+    Determine the grid step in the P1/P0 parameter space such that the maximum
+    tolerated frequency drift over the full time span covered by the data
+    is smaller than the FFT resolution (see eq.3 in Ziegler et all 2008) for
+    the largest frequency considered int the search.
+
+    """
+
+    # Find the span covered by the data.
+    time_span = np.amax(times) - np.amin(times)
+
+    # The fft resolution
+    FFT_resol = 1. / windowSize
+
+    # The F1 resolution
+    f1_tolerance = 1. * FFT_resol / time_span
+
+    # At least one point in the grid is within 1/2 the grid step from the
+    # correct value of the parameter (f1/f0)
+    return 2. * f1_tolerance / maxFreq
+
+
+# Get the step in F2/F0
+def GetF2_F0Step(times, windowSize=524288, maxFreq=64):
+
+    # Find the span covered by the data.
+    time_span = np.amax(times) - np.amin(times)
+
+    # The fft resolution
+    FFT_resol = 1. / windowSize
+
+    # The F2 resolution
+    f2_tolerance = 2. * FFT_resol / time_span**2
+
+    # At least one point in the grid is within 1/2 the grid step from the
+    # correct value of the parameter (f1/f0)
+    return 2. * f2_tolerance / maxFreq
+
+
 # Find the appropriate step in P1/P0
 def GetP1_P0Step(times, windowSize=524288, maxFreq=64):
     """
