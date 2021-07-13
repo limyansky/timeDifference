@@ -158,6 +158,30 @@ def main():
     f1_f0_step = GetF1_F0Step(times, args.window_size, args.max_freq)
     f1_f0_list = GetF1_F0List(f1_f0_step, lower_f1_f0, upper_f1_f0)
 
+    # Set up a search grid in F2/F0.
+
+    # If no F2 is specified, set it to zero
+    if args.lower_f2 is None and args.upper_f2 is None:
+        f2_f0_list = [0]
+
+    # If both an upper/lower F2 are specified, proceed with generating a list
+    # of values to scan over.
+    elif args.lower_f2 is not None and args.upper_f2 is not None:
+        # Setup a basic search grid in f1/f0
+        # Calculate the minimum and maximum f1/f0 ratios
+        lower_f2_f0 = args.lower_f2 / args.max_freq
+        upper_f2_f0 = args.upper_f2 / args.min_freq
+
+        # Set up a search grid in F2/F0
+        f2_f0_step = GetF1_F0Step(times, args.window_size, args.max_freq)
+        f2_f0_list = GetF1_F0List(f2_f0_step, lower_f2_f0, upper_f2_f0)
+
+    # If only one upper or lower f2 value was specified, then exit with an
+    # explanation
+    else:
+        print('You must either specify BOTH an upper/lower F2, or neither.')
+        return 0
+
     # Begin the search process
     # OverallBest = [0, 0, 1]
 
@@ -223,38 +247,46 @@ def main():
     # p1/p0 values we wish for that particular core to scan over. A placeholder
     # "0" is used for those, and will be filled in in the following loop.
     template_input = [times, weights, args.window_size, args.min_freq,
-                      args.max_freq, epoch, 0, args.wisdom_file, args.out_file]
+                      args.max_freq, epoch, 0, 0,
+                      args.wisdom_file, args.out_file]
 
     # Now that we have the break points, we run through them to fill in the
     # list of lists we will be iterating through.
-    for ii in range(len(break_points) - 1):
 
-        # Fill in the appropriate spot in the template
-        template_input[6] = f1_f0_list[break_points[ii]:break_points[ii + 1]]
+    for jj in f2_f0_list:
+        for ii in range(len(break_points) - 1):
 
-        # This is good to double check that jobs are being partitioned
-        # correctly.
-        # print(template_input[6])
+            # Fill in the appropriate spot in the template
+            template_input[6] = f1_f0_list[break_points[ii]:break_points[ii + 1]]
 
-        # If we don't append a deepcopy, all cores will recieve a copy of only
-        # the last p1_p0_list slice and thus all to the same job.
-        f1_f0_master.append(deepcopy(template_input))
+            # Add the f2_f0 value we want to look at
+            template_input[7] = jj
 
-    # Run through the lists in a multiprocessing way.
-    # Locks can't be passed to multiprocessing as arguments (because they are
-    # non-pickelable), so I have to use the initalizer and initargs keyword
-    # arguments to ensure that each process has access to the lock.
-    pool = multiprocessing.Pool(initializer=init_lock, initargs=(lock,),
-                                processes=args.n_cores)
+            # This is good to double check that jobs are being partitioned
+            # correctly.
+            # print(template_input[6])
 
-    # Actually runs the multiprocessing
-    pool.starmap(run_scan, f1_f0_master)
+            # If we don't append a deepcopy, all cores will recieve a copy of
+            # only
+            # the last p1_p0_list slice and thus all to the same job.
+            f1_f0_master.append(deepcopy(template_input))
 
-    # closes the pool when we are done
-    pool.close()
+        # Run through the lists in a multiprocessing way.
+        # Locks can't be passed to multiprocessing as arguments (because they
+        # are
+        # non-pickelable), so I have to use the initalizer and initargs keyword
+        # arguments to ensure that each process has access to the lock.
+        pool = multiprocessing.Pool(initializer=init_lock, initargs=(lock,),
+                                    processes=args.n_cores)
 
-    # Show a summary of the search
-    print("\nScan in -f1/f0 completed after %d steps" % (len(f1_f0_list)))
+        # Actually runs the multiprocessing
+        pool.starmap(run_scan, f1_f0_master)
+
+        # closes the pool when we are done
+        pool.close()
+
+        # Show a summary of the search
+        print("\nScan in -f1/f0 completed after %d steps" % (len(f1_f0_list)))
 
     return 0
 
@@ -263,11 +295,10 @@ def main():
 # load_wisdom is not initalized to None because multiprocessing starmap cannot
 # easily pass in keyword arguments. The same is true of out_file.
 def run_scan(times, weights,
-             window_size, min_freq, max_freq, epoch, p1_p0_list, load_wisdom,
-             out_file,
-             save_wisdom=None):
+             window_size, min_freq, max_freq, epoch, f1_f0_list, f2_f0,
+             load_wisdom, out_file, save_wisdom=None):
     """
-    Runs a single search step in P1_P0
+    Runs a single search step in F1_F0
 
     Parameters:
         times: A list of photon times
@@ -275,7 +306,8 @@ def run_scan(times, weights,
         window_size: The maximum time difference, in seconds
         max_freq: The maximum frequency to search
         epoch: The epoch from which to correct photon times
-        p1_p0_lsit: A list of P1/P0 steps over which to search
+        f1_f0_lsit: A list of F1/F0 steps over which to search
+        f2_f2: A single F2/F0 value to examine
 
     Keyword Arguments:
         save_wisdom: A place to save the fft wisdom file
@@ -293,14 +325,14 @@ def run_scan(times, weights,
 
     step = 0
 
-    for p1_p0 in p1_p0_list:
+    for f1_f0 in f1_f0_list:
 
         step += 1
         print(multiprocessing.current_process(),
-              'Step: ', step, '/', len(p1_p0_list))
+              'Step: ', step, '/', len(f1_f0_list))
 
         # Correct the times
-        new_times = TimeWarp(times, p1_p0, epoch)
+        new_times = TimeWarp_F1_F2(times, f1_f0, f2_f0, epoch)
 
         # Find the time differences
         time_differences = call_CtimeDiff(CtimeDiff,
@@ -330,7 +362,7 @@ def run_scan(times, weights,
         lock.acquire()
 
         # Print the candidate
-        DisplayCandidate([freq, p1_p0, p_value], out_file=out_file)
+        DisplayCandidate([freq, f1_f0, f2_f0, p_value], out_file=out_file)
 
         # Release the lock
         lock.release()
