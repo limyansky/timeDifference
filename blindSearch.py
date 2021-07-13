@@ -98,15 +98,25 @@ def main():
                         default=None,
                         help='The name of the weights column in FT1_file')
 
-    parser.add_argument('--lower_p1_p0',
+    parser.add_argument('--lower_f1',
                         nargs='?',
-                        default=0,
-                        help='The lower bound of p1/p0 in s^-1')
+                        default=1,
+                        help='The lower f1 value to search.')
 
-    parser.add_argument('--upper_p1_p0',
+    parser.add_argument('--upper_f1',
                         nargs='?',
-                        default=1.3e-11,
-                        help='The upper bound of p1/p0 in s^-1')
+                        default=1,
+                        help='The upper f1 value to search.')
+
+    parser.add_argument('--lower_f2',
+                        nargs='?',
+                        default=None,
+                        help='The lower value of f2 to search.')
+
+    parser.add_argument('--upper_f2',
+                        nargs='?',
+                        default=None,
+                        help='The upper value of f2 to search.')
 
     parser.add_argument('--wisdom_file',
                         nargs='?',
@@ -140,9 +150,13 @@ def main():
     # Calculate the epoch as the center of the times
     epoch = (np.amax(times) + np.amin(times)) / 2.
 
-    # Setup a basic search grid in -f1/f0
-    p1_p0_step = GetP1_P0Step(times, args.window_size, args.max_freq)
-    p1_p0_list = GetP1_P0List(p1_p0_step, args.lower_p1_p0, args.upper_p1_p0)
+    # Setup a basic search grid in f1/f0
+    # Calculate the minimum and maximum f1/f0 ratios
+    lower_f1_f0 = args.lower_f1 / args.max_freq
+    upper_f1_f0 = args.upper_f1 / args.min_freq
+
+    f1_f0_step = GetF1_F0Step(times, args.window_size, args.max_freq)
+    f1_f0_list = GetF1_F0List(f1_f0_step, lower_f1_f0, upper_f1_f0)
 
     # Begin the search process
     # OverallBest = [0, 0, 1]
@@ -162,18 +176,18 @@ def main():
 
         # Run a single iteration of the scan, saving the wisdom file
         run_scan(times, weights, args.window_size, args.min_freq,
-                 args.max_freq, epoch, p1_p0_list[0], None,
+                 args.max_freq, epoch, f1_f0_list[0], None,
                  args.out_file, save_wisdom=args.wisdom_file)
 
-    # Break up the p1_p0 list into smaller lists, one for each processor.
+    # Break up the f1_f0 list into smaller lists, one for each processor.
 
     # Initalize the list of lists
-    p1_p0_master = []
+    f1_f0_master = []
 
     # Calculate the break points to split the process between cores.
     # This value is roughly (e.g. if you have an odd number of p1/p0, but an
     # even number of cores) the number of jobs per core.
-    unit_length = floor((len(p1_p0_list) - 1) / args.n_cores)
+    unit_length = floor((len(f1_f0_list) - 1) / args.n_cores)
 
     # A place to keep track of where we want to slice the p1_p0 list
     break_points = []
@@ -202,7 +216,7 @@ def main():
         break_points.append(ii * unit_length + 1)
 
     # make sure it ends at the last bin
-    break_points.append(len(p1_p0_list))
+    break_points.append(len(f1_f0_list))
 
     # Create a template that will be passed to starmap.
     # This holds all the arguments that run_scan needs, other than the
@@ -216,7 +230,7 @@ def main():
     for ii in range(len(break_points) - 1):
 
         # Fill in the appropriate spot in the template
-        template_input[6] = p1_p0_list[break_points[ii]:break_points[ii + 1]]
+        template_input[6] = f1_f0_list[break_points[ii]:break_points[ii + 1]]
 
         # This is good to double check that jobs are being partitioned
         # correctly.
@@ -224,7 +238,7 @@ def main():
 
         # If we don't append a deepcopy, all cores will recieve a copy of only
         # the last p1_p0_list slice and thus all to the same job.
-        p1_p0_master.append(deepcopy(template_input))
+        f1_f0_master.append(deepcopy(template_input))
 
     # Run through the lists in a multiprocessing way.
     # Locks can't be passed to multiprocessing as arguments (because they are
@@ -234,13 +248,13 @@ def main():
                                 processes=args.n_cores)
 
     # Actually runs the multiprocessing
-    pool.starmap(run_scan, p1_p0_master)
+    pool.starmap(run_scan, f1_f0_master)
 
     # closes the pool when we are done
     pool.close()
 
     # Show a summary of the search
-    print("\nScan in -f1/f0 completed after %d steps" % (len(p1_p0_list)))
+    print("\nScan in -f1/f0 completed after %d steps" % (len(f1_f0_list)))
 
     return 0
 
@@ -648,6 +662,11 @@ def TimeWarp_F2(times, f2_f0, epoch):
     Compenstate for a steady frequency drift acceleration.
     This way the new time series is periodic and can be searched with standard
     FFTs.
+
+    Paramters:
+        times: A list of (numpy array) photon times
+        f2_f0: The F2/F0 value to correct
+        epoch: the Epoch of the timing solution
     """
 
     times = times + (1 / 6) * f2_f0 * (times - epoch) ** 3
@@ -657,6 +676,17 @@ def TimeWarp_F2(times, f2_f0, epoch):
 
 # Correct times for a step in both F1 and F2
 def TimeWarp_F1_F2(times, f1_f0, f2_f0, epoch):
+    """
+    Compensate for a F1 and F2 frequency drift.
+    This way the new time series is periodic and can be searched with standard
+    FFTs.
+
+    Parameters:
+        times: A list (numpy array) of photon times
+        f1_f0: The F1/F0 value to correct
+        f2_f0: The F2/F0 value to correct
+        epoch: The epoch of the timing solution
+    """
 
     times = times + (0.5 * f1_f0 * (times - epoch) ** 2) + \
                     ((1 / 6) * f2_f0 * (times - epoch) ** 3)
