@@ -100,22 +100,24 @@ def main():
 
     parser.add_argument('--lower_f1',
                         nargs='?',
-                        default=1,
+                        default=-3.8e-10,
                         help='The lower f1 value to search.')
 
     parser.add_argument('--upper_f1',
                         nargs='?',
-                        default=1,
+                        default=0,
                         help='The upper f1 value to search.')
 
     parser.add_argument('--lower_f2',
                         nargs='?',
-                        default=None,
+                        default=0.,
+                        type=float,
                         help='The lower value of f2 to search.')
 
     parser.add_argument('--upper_f2',
                         nargs='?',
-                        default=None,
+                        default=0.,
+                        type=float,
                         help='The upper value of f2 to search.')
 
     parser.add_argument('--wisdom_file',
@@ -161,7 +163,7 @@ def main():
     # Set up a search grid in F2/F0.
 
     # If no F2 is specified, set it to zero
-    if args.lower_f2 is None and args.upper_f2 is None:
+    if args.lower_f2 == 0 and args.upper_f2 == 0:
         f2_f0_list = [0]
 
     # If both an upper/lower F2 are specified, proceed with generating a list
@@ -173,14 +175,8 @@ def main():
         upper_f2_f0 = args.upper_f2 / args.min_freq
 
         # Set up a search grid in F2/F0
-        f2_f0_step = GetF1_F0Step(times, args.window_size, args.max_freq)
-        f2_f0_list = GetF1_F0List(f2_f0_step, lower_f2_f0, upper_f2_f0)
-
-    # If only one upper or lower f2 value was specified, then exit with an
-    # explanation
-    else:
-        print('You must either specify BOTH an upper/lower F2, or neither.')
-        return 0
+        f2_f0_step = GetF2_F0Step(times, args.window_size, args.max_freq)
+        f2_f0_list = GetF2_F0List(f2_f0_step, lower_f2_f0, upper_f2_f0)
 
     # Begin the search process
     # OverallBest = [0, 0, 1]
@@ -253,7 +249,16 @@ def main():
     # Now that we have the break points, we run through them to fill in the
     # list of lists we will be iterating through.
 
+    # A counter to keep track of how far we have progressed in F2
+    f2_count = 0
+
+    # Loop through the F2 values
     for jj in f2_f0_list:
+
+        # Keep track of the progress in F2
+        f2_count += 1
+        print("F2 step: ", f2_count, '/', len(f2_f0_list))
+
         for ii in range(len(break_points) - 1):
 
             # Fill in the appropriate spot in the template
