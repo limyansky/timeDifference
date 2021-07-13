@@ -502,6 +502,24 @@ def GetF1_F0Step(times, windowSize=524288, maxFreq=64):
     return 2. * f1_tolerance / maxFreq
 
 
+# Generate a list of F1/F0 values to scan over
+def GetF1_F0List(f1_f0_step, lower_f1_f0=-1.3e-11, upper_f1_f0=0.):
+    """
+    Generate a list of F1/F0 values to scan over
+
+    Parameters:
+        f1_f0_step: The step size of F1/F0
+
+    Keyword Arguments:
+        lower_f1_f0: The lower limit for the list values you want
+        upper_f1_f0: The upper limit for the list values you want
+    """
+
+    # This is a one-liner
+    # Add one last step, even if it falls outside of the range
+    return np.arange(lower_f1_f0, upper_f1_f0 + f1_f0_step, f1_f0_step)
+
+
 # Get the step in F2/F0
 def GetF2_F0Step(times, windowSize=524288, maxFreq=64):
 
@@ -517,6 +535,24 @@ def GetF2_F0Step(times, windowSize=524288, maxFreq=64):
     # At least one point in the grid is within 1/2 the grid step from the
     # correct value of the parameter (f1/f0)
     return 2. * f2_tolerance / maxFreq
+
+
+# Generate a list of F1/F0 values to scan over
+def GetF2_F0List(f2_f0_step, lower_f2_f0=-1.3e-11, upper_f2_f0=0.):
+    """
+    Generate a list of F2/F0 values to scan over
+
+    Parameters:
+        f2_f0_step: The step size of F2/F0
+
+    Keyword Arguments:
+        lower_f2_f0: The lower limit for the list values you want
+        upper_f2_f0: The upper limit for the list values you want
+    """
+
+    # This is a one-liner
+    # Add one last step, even if it falls outside of the range
+    return np.arange(lower_f2_f0, upper_f2_f0 + f2_f0_step, f2_f0_step)
 
 
 # Find the appropriate step in P1/P0
@@ -584,6 +620,46 @@ def TimeWarp(times, p1_p0, epoch):
 
     # the minus sign enters because p1_p0 is p1/p0=-f1/f0
     times = times - 0.5 * p1_p0 * (times - epoch)**2
+
+    return times
+
+
+# Correct times for a step in F1/F0
+def TimeWarp_F1(times, f1_f0, epoch):
+    """
+    Compenstate for a steady frequency drift. This way the new time series is
+    periodic and can be searched with standard FFTs. The time transform is
+    described in Ransom et al. 2001. See also eq 1 in Ziegler et al. 2008.
+
+    Parameters:
+        times: A list (numpy array) of photon times
+        f1_f0: The F1/F0 value to correct
+        epoch: The epoch of the timing solution
+    """
+
+    times = times + 0.5 * f1_f0 * (times - epoch) ** 2
+
+    return times
+
+
+# Correct times for a step in F2/F0
+def TimeWarp_F2(times, f2_f0, epoch):
+    """
+    Compenstate for a steady frequency drift acceleration.
+    This way the new time series is periodic and can be searched with standard
+    FFTs.
+    """
+
+    times = times + (1 / 6) * f2_f0 * (times - epoch) ** 3
+
+    return times
+
+
+# Correct times for a step in both F1 and F2
+def TimeWarp_F1_F2(times, f1_f0, f2_f0, epoch):
+
+    times = times + (0.5 * f1_f0 * (times - epoch) ** 2) + \
+                    ((1 / 6) * f2_f0 * (times - epoch) ** 3)
 
     return times
 
