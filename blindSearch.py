@@ -86,11 +86,13 @@ def main():
     parser.add_argument('--max_freq',
                         nargs='?',
                         default=64,
+                        type=int,
                         help='Maximum frequency to search in Hz')
 
     parser.add_argument('--min_freq',
                         nargs='?',
                         default=0.5,
+                        type=float,
                         help='Minimum frequency to search in Hz')
 
     parser.add_argument('--weight_column',
@@ -101,11 +103,13 @@ def main():
     parser.add_argument('--lower_f1',
                         nargs='?',
                         default=-3.8e-10,
+                        type=float,
                         help='The lower f1 value to search.')
 
     parser.add_argument('--upper_f1',
                         nargs='?',
                         default=0,
+                        type=float,
                         help='The upper f1 value to search.')
 
     parser.add_argument('--lower_f2',
@@ -276,6 +280,8 @@ def main():
             # the last p1_p0_list slice and thus all to the same job.
             f1_f0_master.append(deepcopy(template_input))
 
+        print("Templates Created.")
+
         # Run through the lists in a multiprocessing way.
         # Locks can't be passed to multiprocessing as arguments (because they
         # are
@@ -283,6 +289,8 @@ def main():
         # arguments to ensure that each process has access to the lock.
         pool = multiprocessing.Pool(initializer=init_lock, initargs=(lock,),
                                     processes=args.n_cores)
+
+        print("Pool initalized")
 
         # Actually runs the multiprocessing
         pool.starmap(run_scan, f1_f0_master)
@@ -324,9 +332,12 @@ def run_scan(times, weights,
     # Load the wisdom file, if requested
     if load_wisdom is not None:
         LoadWisdom(load_wisdom)
+        print('wisdom loaded')
 
+    print('initalizing fftw')
     # Initalize pyfftw
     fftw_object, fft_input, fft_output = init_FFTW(window_size, max_freq)
+    print('initalized fftw')
 
     step = 0
 
@@ -425,7 +436,7 @@ def readEvents(FT1_file, weight_column=None):
         # Sort the weights
         weights = weights[sort_indicies]
     else:
-        weights = 1 * len(times)
+        weights = np.ones(len(times))
 
     # Close the file
     hdu.close()
