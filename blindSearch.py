@@ -987,7 +987,7 @@ def DisplayCandidate(candidate, best=False, out_file=None):
     if best:
         print("\nThe best pulsar candidate is:")
     # the second entry in the candidate is the value of p1/p0=-f1/f0
-    Fdot = -1. * candidate[1] * candidate[0]
+    Fdot = candidate[1] * candidate[0]
     Fdotdot = candidate[2] * candidate[0]
     # print("F0=%.8f F1=%.3e P-Value=%.2e" % (candidate[0], Fdot,
     #       candidate[2]))

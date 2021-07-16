@@ -24,9 +24,24 @@ def main():
     parser.add_argument('csv_file',
                         help='The output .csv file of a blind search')
 
+    parser.add_argument('--output_root',
+                        default='sorted',
+                        help='The name of the output files.')
+
     # Extract the arguments from the parser
     args = parser.parse_args()
 
+    # Load the csv file
+    data = pd.read_csv(args.csv_file, header=[0])
+
+    # Sort the csv file
+    data.sort_values(['P-Value'], inplace=True)
+
+    # Create the name where the output sorted csv file will be saved
+    csv_out = args.output_root + '.csv'
+
+    # Save the sorted csv file
+    data.to_csv(csv_out, index=False)
 
     return 0
 
