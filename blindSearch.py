@@ -280,8 +280,6 @@ def main():
             # the last p1_p0_list slice and thus all to the same job.
             f1_f0_master.append(deepcopy(template_input))
 
-        print("Templates Created.")
-
         # Run through the lists in a multiprocessing way.
         # Locks can't be passed to multiprocessing as arguments (because they
         # are
@@ -289,8 +287,6 @@ def main():
         # arguments to ensure that each process has access to the lock.
         pool = multiprocessing.Pool(initializer=init_lock, initargs=(lock,),
                                     processes=args.n_cores)
-
-        print("Pool initalized")
 
         # Actually runs the multiprocessing
         pool.starmap(run_scan, f1_f0_master)
@@ -378,7 +374,8 @@ def run_scan(times, weights,
         lock.acquire()
 
         # Print the candidate
-        DisplayCandidate([freq, f1_f0, f2_f0, p_value], out_file=out_file)
+        DisplayCandidate([freq, f1_f0, f2_f0, p_value, epoch],
+                         out_file=out_file)
 
         # Release the lock
         lock.release()
@@ -960,7 +957,7 @@ def initOutFile(outFile):
     """
 
     # The row that we want to write to the file
-    row = ['F0', 'F1', 'F2', 'P-Value']
+    row = ['F0', 'F1', 'F2', 'P-Value', 'epoch']
 
     # Open the file for writing
     with open(outFile, 'w') as f:
@@ -1001,7 +998,8 @@ def DisplayCandidate(candidate, best=False, out_file=None):
             writer = csv.writer(f)
 
             # Write the row
-            writer.writerow([candidate[0], Fdot, Fdotdot, candidate[3]])
+            writer.writerow([candidate[0], Fdot, Fdotdot, candidate[3],
+                             candidate[4]])
 
     if best:
         if candidate[1] == 0:
