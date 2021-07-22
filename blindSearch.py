@@ -86,11 +86,13 @@ def main():
     parser.add_argument('--max_freq',
                         nargs='?',
                         default=64,
+                        type=int,
                         help='Maximum frequency to search in Hz')
 
     parser.add_argument('--min_freq',
                         nargs='?',
                         default=0.5,
+                        type=float,
                         help='Minimum frequency to search in Hz')
 
     parser.add_argument('--weight_column',
@@ -101,11 +103,13 @@ def main():
     parser.add_argument('--lower_f1',
                         nargs='?',
                         default=-3.8e-10,
+                        type=float,
                         help='The lower f1 value to search.')
 
     parser.add_argument('--upper_f1',
                         nargs='?',
                         default=0,
+                        type=float,
                         help='The upper f1 value to search.')
 
     parser.add_argument('--lower_f2',
@@ -324,9 +328,12 @@ def run_scan(times, weights,
     # Load the wisdom file, if requested
     if load_wisdom is not None:
         LoadWisdom(load_wisdom)
+        print('wisdom loaded')
 
+    print('initalizing fftw')
     # Initalize pyfftw
     fftw_object, fft_input, fft_output = init_FFTW(window_size, max_freq)
+    print('initalized fftw')
 
     step = 0
 
@@ -367,7 +374,8 @@ def run_scan(times, weights,
         lock.acquire()
 
         # Print the candidate
-        DisplayCandidate([freq, f1_f0, f2_f0, p_value], out_file=out_file)
+        DisplayCandidate([freq, f1_f0, f2_f0, p_value, epoch],
+                         out_file=out_file)
 
         # Release the lock
         lock.release()
@@ -425,7 +433,7 @@ def readEvents(FT1_file, weight_column=None):
         # Sort the weights
         weights = weights[sort_indicies]
     else:
-        weights = 1 * len(times)
+        weights = np.ones(len(times))
 
     # Close the file
     hdu.close()
@@ -949,7 +957,7 @@ def initOutFile(outFile):
     """
 
     # The row that we want to write to the file
-    row = ['F0', 'F1', 'F2', 'P-Value']
+    row = ['F0', 'F1', 'F2', 'P-Value', 'epoch']
 
     # Open the file for writing
     with open(outFile, 'w') as f:
@@ -976,7 +984,7 @@ def DisplayCandidate(candidate, best=False, out_file=None):
     if best:
         print("\nThe best pulsar candidate is:")
     # the second entry in the candidate is the value of p1/p0=-f1/f0
-    Fdot = -1. * candidate[1] * candidate[0]
+    Fdot = candidate[1] * candidate[0]
     Fdotdot = candidate[2] * candidate[0]
     # print("F0=%.8f F1=%.3e P-Value=%.2e" % (candidate[0], Fdot,
     #       candidate[2]))
@@ -990,7 +998,8 @@ def DisplayCandidate(candidate, best=False, out_file=None):
             writer = csv.writer(f)
 
             # Write the row
-            writer.writerow([candidate[0], Fdot, Fdotdot, candidate[3]])
+            writer.writerow([candidate[0], Fdot, Fdotdot, candidate[3],
+                             candidate[4]])
 
     if best:
         if candidate[1] == 0:
