@@ -86,11 +86,13 @@ def main():
     parser.add_argument('--max_freq',
                         nargs='?',
                         default=64,
+                        type=int,
                         help='Maximum frequency to search in Hz')
 
     parser.add_argument('--min_freq',
                         nargs='?',
                         default=0.5,
+                        type=float,
                         help='Minimum frequency to search in Hz')
 
     parser.add_argument('--weight_column',
@@ -101,12 +103,21 @@ def main():
     parser.add_argument('--lower_f1',
                         nargs='?',
                         default=-3.8e-10,
+                        type=float,
                         help='The lower f1 value to search.')
 
     parser.add_argument('--upper_f1',
                         nargs='?',
                         default=0,
+                        type=float,
                         help='The upper f1 value to search.')
+
+    parser.add_argument('--oversample_f1_f0',
+                        nargs='?',
+                        default=1,
+                        type=int,
+                        help='Increases the density with which F1/F0 is '
+                             'scanned by this multiplicative factor.')
 
     parser.add_argument('--lower_f2',
                         nargs='?',
@@ -119,6 +130,13 @@ def main():
                         default=0.,
                         type=float,
                         help='The upper value of f2 to search.')
+
+    parser.add_argument('--oversample_f2_f0',
+                        nargs='?',
+                        default=1,
+                        type=int,
+                        help='Increases the density with which F2/F0 is '
+                             'scanned by this multiplicative factor.')
 
     parser.add_argument('--wisdom_file',
                         nargs='?',
@@ -158,6 +176,10 @@ def main():
     upper_f1_f0 = args.upper_f1 / args.min_freq
 
     f1_f0_step = GetF1_F0Step(times, args.window_size, args.max_freq)
+
+    # Increase the density scanned (the default value is 1, or no change).
+    f1_f0_step = f1_f0_step / args.oversample_f1_f0
+
     f1_f0_list = GetF1_F0List(f1_f0_step, lower_f1_f0, upper_f1_f0)
 
     # Set up a search grid in F2/F0.
@@ -176,6 +198,10 @@ def main():
 
         # Set up a search grid in F2/F0
         f2_f0_step = GetF2_F0Step(times, args.window_size, args.max_freq)
+
+        # Increase the density scanned (the default value is 1, or no change).
+        f2_f0_step = f2_f0_step / args.oversample_f2_f0
+
         f2_f0_list = GetF2_F0List(f2_f0_step, lower_f2_f0, upper_f2_f0)
 
     # Begin the search process
