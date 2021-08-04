@@ -112,6 +112,13 @@ def main():
                         type=float,
                         help='The upper f1 value to search.')
 
+    parser.add_argument('--oversample_f1_f0',
+                        nargs='?',
+                        default=1,
+                        type=int,
+                        help='Increases the density with which F1/F0 is '
+                             'scanned by this multiplicative factor.')
+
     parser.add_argument('--lower_f2',
                         nargs='?',
                         default=0.,
@@ -123,6 +130,13 @@ def main():
                         default=0.,
                         type=float,
                         help='The upper value of f2 to search.')
+
+    parser.add_argument('--oversample_f2_f0',
+                        nargs='?',
+                        default=1,
+                        type=int,
+                        help='Increases the density with which F2/F0 is '
+                             'scanned by this multiplicative factor.')
 
     parser.add_argument('--wisdom_file',
                         nargs='?',
@@ -162,6 +176,10 @@ def main():
     upper_f1_f0 = args.upper_f1 / args.min_freq
 
     f1_f0_step = GetF1_F0Step(times, args.window_size, args.max_freq)
+
+    # Increase the density scanned (the default value is 1, or no change).
+    f1_f0_step = f1_f0_step / args.oversample_f1_f0
+
     f1_f0_list = GetF1_F0List(f1_f0_step, lower_f1_f0, upper_f1_f0)
 
     # Set up a search grid in F2/F0.
@@ -180,6 +198,10 @@ def main():
 
         # Set up a search grid in F2/F0
         f2_f0_step = GetF2_F0Step(times, args.window_size, args.max_freq)
+
+        # Increase the density scanned (the default value is 1, or no change).
+        f2_f0_step = f2_f0_step / args.oversample_f2_f0
+
         f2_f0_list = GetF2_F0List(f2_f0_step, lower_f2_f0, upper_f2_f0)
 
     # Begin the search process
@@ -771,6 +793,7 @@ def init_FFTW(window_size, max_freq):
 
     # Calculate the size of the fft
     FFT_size = FFT_Size(window_size, max_freq)
+    print('FFT_size: ', FFT_size)
     alignment = pyfftw.simd_alignment
 
     # this is tricky: it is needed to get the correct memory alignment for fftw
@@ -865,12 +888,14 @@ def ExtractBestCandidate(power_spectrum, min_freq, max_freq):
 
     # This value is roughly correct, though FFT_resol := 1/window_size
     FFT_resol = float(max_freq) / (len(power_spectrum) - 1.0)
+    print('power_spectrum before cut: ', len(power_spectrum))
 
     # Ignore peaks at the lowest frequencies, in order to avoid red noise
     min_index = int(np.floor(float(min_freq) / FFT_resol))
+    print('min_index: ', min_index)
     peak_index = min_index + np.argmax(power_spectrum[min_index:])
 
-    power_spectrum = power_spectrum[min_index:]
+    #power_spectrum = power_spectrum[min_index:]
 
     # We need this operation of CPU complexity NlogN to interpret the power
     power_spectrum = np.sort(power_spectrum[min_index:], kind='heapsort')[::-1]
@@ -899,6 +924,8 @@ def FitExponentialTail(sorted_array):
     Parameters:
         sorted_array: A sorted power spectrum from pyfftw
     """
+
+    print('length: ', len(sorted_array))
 
     # We define the tail through an emprical approximation
     if len(sorted_array) > 2000000:
