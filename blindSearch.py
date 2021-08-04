@@ -536,8 +536,6 @@ def call_CinPlace(function, photons, weights, windowSize=524288, maxFreq=64):
     function(cPhotons, cWeights, cHistogram,
              windowSize, maxFreq, len(cPhotons))
 
-    print(sum(histogram))
-
     return histogram
 
 
@@ -888,11 +886,9 @@ def ExtractBestCandidate(power_spectrum, min_freq, max_freq):
 
     # This value is roughly correct, though FFT_resol := 1/window_size
     FFT_resol = float(max_freq) / (len(power_spectrum) - 1.0)
-    print('power_spectrum before cut: ', len(power_spectrum))
 
     # Ignore peaks at the lowest frequencies, in order to avoid red noise
     min_index = int(np.floor(float(min_freq) / FFT_resol))
-    print('min_index: ', min_index)
     peak_index = min_index + np.argmax(power_spectrum[min_index:])
 
     #power_spectrum = power_spectrum[min_index:]
@@ -924,8 +920,6 @@ def FitExponentialTail(sorted_array):
     Parameters:
         sorted_array: A sorted power spectrum from pyfftw
     """
-
-    print('length: ', len(sorted_array))
 
     # We define the tail through an emprical approximation
     if len(sorted_array) > 2000000:
