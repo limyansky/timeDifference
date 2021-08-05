@@ -44,6 +44,7 @@ timeDifference = CDLL('/home/brent/github/timeDifference/timeDiff.so')
 
 # Pull the relevant functions from the C library
 CtimeDiff = timeDifference.timeDifference_fast
+CtimeDiff = timeDifference.timeDifference_fast_double
 cleanup = timeDifference.cleanup
 
 # Varous functions that I've written, but haven't used
@@ -86,7 +87,7 @@ def main():
     parser.add_argument('--max_freq',
                         nargs='?',
                         default=64,
-                        type=int,
+                        type=float,
                         help='Maximum frequency to search in Hz')
 
     parser.add_argument('--min_freq',
@@ -479,8 +480,11 @@ def call_CtimeDiff(function, photons, weights, windowSize=524288, maxFreq=64):
     """
 
     # Specify the datatypes that will be used as inputs
+    # function.argtypes = [POINTER(c_double), POINTER(c_double),
+    #                      c_int, c_int, c_int]
+
     function.argtypes = [POINTER(c_double), POINTER(c_double),
-                         c_int, c_int, c_int]
+                         c_int, c_double, c_int]
 
     # Specify the datatypes that will be used as outputs
     function.restype = POINTER(c_double * FFT_Size(windowSize, maxFreq))
