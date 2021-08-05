@@ -752,6 +752,7 @@ def TimeWarp_F1_F2(times, f1_f0, f2_f0, epoch):
         f2_f0: The F2/F0 value to correct
         epoch: The epoch of the timing solution
     """
+    print(f1_f0)
 
     times = times + (0.5 * f1_f0 * (times - epoch) ** 2) + \
                     ((1 / 6) * f2_f0 * (times - epoch) ** 3)

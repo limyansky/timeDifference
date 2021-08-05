@@ -14,12 +14,14 @@
 
 double * timeDifference(double *, double*, int, int, int);
 double * timeDifference_fast(double *, double*, int, int, int);
+double * timeDifference_fast_double(double *, double*, int, double, int);
 void timeDifference_inPlace(double *, double*, double*, int, int, int);
 void cleanup(void *);
 // double * timeDifference_multi(double *, double *, int, int, int, int, int);
 // double * timeDifference_multi(double *, double *, int, int, int, int, int);
 
 int fftSize(int, int);
+int fftSize_double(int, double);
 // double * linearFit(double *, int);
 void wrap_qsort(float *, int);
 int cmpfunc(const void *, const void *);
@@ -149,6 +151,11 @@ void wrap_qsort (float * input, int size){
 
 // Calculate the size of an FFT
 int fftSize(int windowSize, int maxFreq){
+    return 2 * floor(windowSize * maxFreq);
+}
+
+//Calculate the size of an FFT, but allow for a double maxFreq
+int fftSize_double(int windowSize, double maxFreq){
     return 2 * floor(windowSize * maxFreq);
 }
 
@@ -295,6 +302,97 @@ double * timeDifference_fast(double *photonTimes, double *photonWeights,
 
     //calculate the size of the fft
     nbins = fftSize(windowSize, maxFreq);
+
+    // Create an array where we will store the output
+    // Actually, let C create this, and I will just modify it in place.
+    // I think this will help with memory leaks.
+    outHistogram = (double *)calloc(nbins, sizeof(double));
+
+    // if memory cannot be allocated
+    if(outHistogram == NULL)                     
+    {
+        printf("Creation of outHistogram didn't work.");
+        exit(0);
+    }
+
+    // Loop through all the photons, except for the last one
+    for (int ii = 0; ii < nPhotons - 1; ii++)
+    {
+        // printf("\n");
+        // printf("ii is: %d\n", ii);
+        // printf("Skip at start of ii: %d\n", skip);
+
+        // If photon 0 differenced up to photon 100 before hitting the
+        // window size, then I know for sure that photon 1 will also
+        // difference up to photon 100 before hitting the window size.
+        // Thus, I can skip checking photonDiff >= windowSize for the 
+        // first 99 photons of the photon 1 time differencing.
+        // "skip" impliments this skipping.
+
+        // Quickly loop through the photons that I already know are okay.
+        for (int jj = ii + 1; jj < (int)fmin(ii + skip, nPhotons); jj++)
+        {
+            // printf("In first loop. Skip is %d\n", skip);
+            // printf("jj is: %d\n", jj);
+            // Calculate the time difference  
+            photonDiff = photonTimes[jj] - photonTimes[ii];
+
+            // Otherwise, calculate the frequency bin
+            freqBin = floor(photonDiff / timeResol);
+
+            // Store the data in the output
+            outHistogram[freqBin] += photonWeights[ii] * photonWeights[jj];
+        }
+
+        // Loop through additional photons.
+        for (int jj = ii + skip; jj < nPhotons; jj++)
+        {
+            // printf("In second loop. Skip is %d\n", skip);
+            // printf("jj is %d\n", jj);
+
+            // Calculate the time difference  
+            photonDiff = photonTimes[jj] - photonTimes[ii];
+            // printf("photonDiff is: %f\n", photonDiff);
+
+            // Exit this second loop if the time difference is too large
+            if (photonDiff >= windowSize)
+            {
+                // printf("Exiting. Photon diff is %d, window size is %d.\n", photonDiff, windowSize);
+                skip = jj - ii - 1;
+                //printf("skip at exit is %d\n", skip);
+                break;
+            }
+
+            // Otherwise, calculate the frequency bin
+            freqBin = floor(photonDiff / timeResol);
+
+            // Store the data in the output
+            outHistogram[freqBin] += photonWeights[ii] * photonWeights[jj];
+
+        }
+    }
+
+    return outHistogram;
+
+}
+
+// Calculates a histogram of time differences... quickly.
+// Allows for a double max frequency
+double * timeDifference_fast_double(double *photonTimes, double *photonWeights,
+                             int windowSize, double maxFreq, int nPhotons){
+
+    double *outHistogram;
+    int nbins;
+    float timeResol;
+    double photonDiff;
+    int freqBin;
+    int skip=1;
+
+    //Calculate the time resolution
+    timeResol = 0.5 / maxFreq;
+
+    //calculate the size of the fft
+    nbins = fftSize_double(windowSize, maxFreq);
 
     // Create an array where we will store the output
     // Actually, let C create this, and I will just modify it in place.
