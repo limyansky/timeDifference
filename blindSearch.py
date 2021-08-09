@@ -173,15 +173,23 @@ def main():
 
     # Setup a basic search grid in f1/f0
     # Calculate the minimum and maximum f1/f0 ratios
-    lower_f1_f0 = args.lower_f1 / args.max_freq
-    upper_f1_f0 = args.upper_f1 / args.min_freq
+    lower_f1_f0 = args.lower_f1 / args.min_freq
+    upper_f1_f0 = args.upper_f1 / args.max_freq
+
+    # # I've encountered some circumstances where lower_f1_f0 and upper_f1_f0
+    # # are flipped. This makes sure everything is in the proper order.
+    # final_lower_f1_f0 = min([lower_f1_f0, upper_f1_f0])
+    # final_upper_f1_f0 = max([lower_f1_f0, upper_f1_f0])
 
     f1_f0_step = GetF1_F0Step(times, args.window_size, args.max_freq)
 
     # Increase the density scanned (the default value is 1, or no change).
     f1_f0_step = f1_f0_step / args.oversample_f1_f0
+    print('f1_f0_step: ', f1_f0_step)
 
     f1_f0_list = GetF1_F0List(f1_f0_step, lower_f1_f0, upper_f1_f0)
+    print('scanning f1_f0: ', lower_f1_f0, ' -> ', upper_f1_f0,
+          ' with ', len(f1_f0_list), ' total steps.')
 
     # Set up a search grid in F2/F0.
 
@@ -351,12 +359,9 @@ def run_scan(times, weights,
     # Load the wisdom file, if requested
     if load_wisdom is not None:
         LoadWisdom(load_wisdom)
-        print('wisdom loaded')
 
-    print('initalizing fftw')
     # Initalize pyfftw
     fftw_object, fft_input, fft_output = init_FFTW(window_size, max_freq)
-    print('initalized fftw')
 
     step = 0
 
@@ -756,7 +761,6 @@ def TimeWarp_F1_F2(times, f1_f0, f2_f0, epoch):
         f2_f0: The F2/F0 value to correct
         epoch: The epoch of the timing solution
     """
-    print(f1_f0)
 
     times = times + (0.5 * f1_f0 * (times - epoch) ** 2) + \
                     ((1 / 6) * f2_f0 * (times - epoch) ** 3)
@@ -796,7 +800,6 @@ def init_FFTW(window_size, max_freq):
 
     # Calculate the size of the fft
     FFT_size = FFT_Size(window_size, max_freq)
-    print('FFT_size: ', FFT_size)
     alignment = pyfftw.simd_alignment
 
     # this is tricky: it is needed to get the correct memory alignment for fftw
