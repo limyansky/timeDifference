@@ -210,8 +210,12 @@ def main():
 
         # Increase the density scanned (the default value is 1, or no change).
         f2_f0_step = f2_f0_step / args.oversample_f2_f0
+        print('f2_f0_step: ', f2_f0_step)
 
         f2_f0_list = GetF2_F0List(f2_f0_step, lower_f2_f0, upper_f2_f0)
+
+        print('scanning f1_f0: ', lower_f2_f0, ' -> ', upper_f2_f0,
+              ' with ', len(f2_f0_list), ' total steps.')
 
     # Begin the search process
     # OverallBest = [0, 0, 1]
