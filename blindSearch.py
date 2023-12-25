@@ -216,18 +216,10 @@ def main():
     # A place to keep track of where we want to slice the p1_p0 list
     break_points = []
 
-    # Check if we need to skip the first bin or not
-    # We may have already calculated this and used it to generate the wisdom
-    # files.
+    # Check already calculated the first bin and used it to generate the wisdom files.
     if initalized:
-
-        # Start by skipping the first bin
         break_points.append(1)
-
-    # If we don't need to skip the first bin, then don't skip it...
     elif not initalized:
-
-        # Don't skip the first bin
         break_points.append(0)
 
     # Fill in subsequent break points
