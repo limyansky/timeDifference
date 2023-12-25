@@ -1,30 +1,22 @@
-# Imports
-
-# Handles commandline inputs
 import argparse
-
-# Varous mathetical functions
 import numpy as np
+import pickle
+import csv
+import os
+import multiprocessing
+from math import floor
 
-# Handles fits files
+# Handles fits files - an astophysical standard
 from astropy.io import fits
 
 # Allows for importing C code
 from ctypes import CDLL, c_int, c_double, POINTER, c_float, c_void_p
 
+# Allows me to delete C object to free up memory
+from copy import deepcopy
+
 # The fourier transform code
 import pyfftw
-
-# File io
-import os
-
-# Saving wisdom files
-import pickle
-
-# Save the outputs as a csv file
-import csv
-
-from math import floor
 
 # Useful for debugging
 # import timeit
@@ -33,11 +25,9 @@ from math import floor
 # kb.
 # print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 
-# Allows me to delete C object to free up memory
-from copy import deepcopy
 
 # Run the code on multiple cores
-import multiprocessing
+
 
 # Load the C library
 timeDifference = CDLL('/home/brent/github/timeDifference/timeDiff.so')
