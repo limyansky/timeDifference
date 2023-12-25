@@ -25,10 +25,6 @@ import pyfftw
 # kb.
 # print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 
-
-# Run the code on multiple cores
-
-
 # Load the C library
 timeDifference = CDLL('/home/brent/github/timeDifference/timeDiff.so')
 
@@ -44,20 +40,29 @@ cleanup = timeDifference.cleanup
 # Setup the simple cleanup function
 cleanup.argtypes = [c_void_p]
 
-
-# The function that will be run when the script is called
 def main():
     """
     Run a blind search for a pulsar using Atwood's time differencing technique.
 
     Parameters:
-        FT1_file: The photon file to search for a pulsar.
+        FT1_file: The photon file to search for a pulsar
 
     Keyword Arguments:
-        --window_size:   The photon file to search for a pulsar
-        --max_freq:      Maximum frequency to search in Hz
-        --min_freq:      Minimum frequency to search in Hz
-        --weight_column: The name of the weights column in FT1_file
+        --window_size:      Maximum time difference in seconds
+        --max_freq:         Maximum frequency to search in Hz
+        --min_freq:         Minimum frequency to search in Hz
+        --weight_column:    The name of the weights column in FT1_file
+        --lower_f1:         The smallest f1 value to search
+        --upper_f1:         The largest f1 value to search
+        --oversample_f1_f0: Increases the density over which f1/f0 is
+                            scanned by this multiplicative factor
+        --lower_f2:         The smallest f2 value to search
+        --upper_f2:         The largest f2 value to search
+        --oversample_f2_f0: Increases the density ofver which f2/f0 is
+                            scanned by this multiplicative factor
+        --wisdom_file:      Where to save and load pyfftw's wisdom file
+        --out_file:         Write the output to this file
+        --n_cores:          The number of processors to use
     """
 
     # Create the argument parser and add the docstring
