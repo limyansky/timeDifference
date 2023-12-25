@@ -155,48 +155,33 @@ def main():
     if args.out_file is not None:
         initOutFile(args.out_file)
 
-    # I need to "lock" the output file within each process, as I can't have
-    # two processes writing to it at the same time.
+    # Prevents multiple processes from simultaneously writing to the file
     lock = multiprocessing.Lock()
 
     # Load the photon times and weights from the input files
     times, weights = readEvents(args.FT1_file, args.weight_column)
 
-    # Calculate the epoch as the center of the times
+    # Set the epoch to center of times
     epoch = (np.amax(times) + np.amin(times)) / 2.
 
-    # Setup a basic search grid in f1/f0
-    # Calculate the minimum and maximum f1/f0 ratios
+    # Setup a search grid in f1/f0
     lower_f1_f0 = args.lower_f1 / args.max_freq
     upper_f1_f0 = args.upper_f1 / args.min_freq
-
     f1_f0_step = GetF1_F0Step(times, args.window_size, args.max_freq)
-
-    # Increase the density scanned (the default value is 1, or no change).
     f1_f0_step = f1_f0_step / args.oversample_f1_f0
-
     f1_f0_list = GetF1_F0List(f1_f0_step, lower_f1_f0, upper_f1_f0)
 
-    # Set up a search grid in F2/F0.
-
-    # If no F2 is specified, set it to zero
-    if args.lower_f2 == 0 and args.upper_f2 == 0:
+    # Setup a search grid in F2/F0.
+    if args.lower_f2 == 0 and args.upper_f2 == 0: # If default not overwritten
         f2_f0_list = [0]
 
-    # If both an upper/lower F2 are specified, proceed with generating a list
-    # of values to scan over.
+    # Note: change this to "else" after testing if "None" can be removed
     elif args.lower_f2 is not None and args.upper_f2 is not None:
-        # Setup a basic search grid in f1/f0
-        # Calculate the minimum and maximum f1/f0 ratios
+        # Setup a search grid in f1/f0
         lower_f2_f0 = args.lower_f2 / args.max_freq
         upper_f2_f0 = args.upper_f2 / args.min_freq
-
-        # Set up a search grid in F2/F0
         f2_f0_step = GetF2_F0Step(times, args.window_size, args.max_freq)
-
-        # Increase the density scanned (the default value is 1, or no change).
         f2_f0_step = f2_f0_step / args.oversample_f2_f0
-
         f2_f0_list = GetF2_F0List(f2_f0_step, lower_f2_f0, upper_f2_f0)
 
     # Begin the search process
@@ -221,8 +206,6 @@ def main():
                  args.out_file, save_wisdom=args.wisdom_file)
 
     # Break up the f1_f0 list into smaller lists, one for each processor.
-
-    # Initalize the list of lists
     f1_f0_master = []
 
     # Calculate the break points to split the process between cores.
